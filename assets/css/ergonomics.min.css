@@ -1,0 +1,167 @@
+.ergonomics-modern {
+    background: #fff;
+    border-radius: 24px;
+    padding: 2rem;
+    margin: 3rem 0;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .08);
+    border: 1px solid #eef2f6
+}
+
+.ergo-header {
+    margin-bottom: 1.5rem
+}
+
+.ergo-header h2 {
+    font-size: 1.9rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: .8rem;
+    color: #0f172a
+}
+
+.ergo-subtitle {
+    color: #64748b;
+    font-size: 1.05rem
+}
+
+.ergo-layout {
+    display: flex;
+    gap: 2rem;
+    min-height: 480px
+}
+
+@media (max-width:992px) {
+    .ergo-layout {
+        flex-direction: column
+    }
+}
+
+.ergo-sidebar {
+    width: 260px;
+    display: flex;
+    flex-direction: column;
+    gap: .7rem
+}
+
+@media (max-width:992px) {
+    .ergo-sidebar {
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: .6rem
+    }
+}
+
+.ergo-vertical-btn {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 1.1rem 1.3rem;
+    border-radius: 16px;
+    font-weight: 600;
+    font-size: 1rem;
+    color: #334155;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    transition: all .2s;
+    text-align: left;
+    flex: 1
+}
+
+@media (max-width:992px) {
+    .ergo-vertical-btn {
+        flex: 1 1 45%;
+        min-width: 160px
+    }
+}
+
+.ergo-vertical-btn i {
+    color: #3b82f6;
+    font-size: 1.3rem;
+    width: 28px
+}
+
+.ergo-vertical-btn:hover {
+    background: #eef2ff;
+    border-color: #3b82f6;
+    transform: translateX(4px)
+}
+
+.ergo-vertical-btn.active {
+    background: #2563eb;
+    color: #fff;
+    border-color: #1d4ed8
+}
+
+.ergo-vertical-btn.active i {
+    color: #fff
+}
+
+.ergo-content {
+    flex: 1;
+    background: #f9fafc;
+    border-radius: 20px;
+    padding: 2rem;
+    border: 1px solid #e2e8f0;
+    overflow-y: auto;
+    max-height: 620px
+}
+
+.ergo-detail-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem
+}
+
+.ergo-detail-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    padding-bottom: .9rem;
+    border-bottom: 2px solid #2563eb
+}
+
+.ergo-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.2rem
+}
+
+.ergo-stat-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 1.3rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .04)
+}
+
+.ergo-stat-card h4 {
+    font-size: 1.05rem;
+    color: #64748b;
+    margin-bottom: .6rem
+}
+
+.ergo-stat-card .value {
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: #2563eb
+}
+
+.ergo-chart-container {
+    background: #fff;
+    border-radius: 16px;
+    padding: 1.6rem;
+    margin-top: 1.2rem;
+    height: 320px;
+    position: relative
+}
+
+@media (max-width:768px) {
+    .ergo-chart-container {
+        height: 280px
+    }
+}

@@ -1,0 +1,308 @@
+/**
+ * World Statistics Platform — UI component styles.
+ */
+
+/* ─── Stats Grid ────────────────────────────────────── */
+.wsp-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--wsp-grid-cols, 4), 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.wsp-stat-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 20px 16px;
+    background: #fff;
+    border: 1px solid var(--wsp-gray-200);
+    border-radius: var(--wsp-radius);
+    transition: box-shadow .2s;
+}
+.wsp-stat-card:hover { box-shadow: var(--wsp-shadow-lg); }
+.wsp-stat-icon {
+    font-size: 28px;
+    color: var(--wsp-primary);
+    margin-bottom: 8px;
+}
+.wsp-stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--wsp-gray-900);
+    line-height: 1.2;
+    margin-bottom: 4px;
+}
+.wsp-stat-label {
+    font-size: 13px;
+    color: var(--wsp-gray-500);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+.wsp-stat-change {
+    font-size: 12px;
+    margin-top: 6px;
+    padding: 2px 8px;
+    border-radius: 20px;
+}
+.wsp-change-up { background: #dcfce7; color: var(--wsp-success); }
+.wsp-change-down { background: #fef2f2; color: var(--wsp-danger); }
+
+@media (max-width: 768px) {
+    .wsp-stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ─── Chart ─────────────────────────────────────────── */
+.wsp-chart-wrap {
+    background: #fff;
+    border: 1px solid var(--wsp-gray-200);
+    border-radius: var(--wsp-radius);
+    padding: 20px;
+    margin-bottom: 24px;
+}
+.wsp-chart-title {
+    margin: 0 0 16px;
+    font-size: 16px;
+    color: var(--wsp-gray-900);
+}
+.wsp-chart-canvas-wrap {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+}
+.wsp-chart-canvas-wrap canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* ─── Data Table ────────────────────────────────────── */
+.wsp-table-wrap {
+    background: #fff;
+    border: 1px solid var(--wsp-gray-200);
+    border-radius: var(--wsp-radius);
+    overflow: hidden;
+    margin-bottom: 24px;
+}
+.wsp-table-toolbar {
+    display: flex;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--wsp-gray-200);
+    background: var(--wsp-gray-50);
+}
+.wsp-table-search { flex: 1; }
+.wsp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+.wsp-table th {
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--wsp-gray-500);
+    background: var(--wsp-gray-50);
+    border-bottom: 1px solid var(--wsp-gray-200);
+}
+.wsp-sortable th { cursor: pointer; user-select: none; }
+.wsp-sortable th:hover { color: var(--wsp-gray-900); }
+.wsp-sortable th.wsp-sort-asc::after { content: ' \25B2'; font-size: 10px; }
+.wsp-sortable th.wsp-sort-desc::after { content: ' \25BC'; font-size: 10px; }
+.wsp-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--wsp-gray-100);
+    color: var(--wsp-gray-700);
+}
+.wsp-table tbody tr:hover { background: var(--wsp-gray-50); }
+.wsp-table tbody tr:last-child td { border-bottom: none; }
+
+/* ─── Comparison ────────────────────────────────────── */
+.wsp-comparison-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.wsp-comparison-card {
+    padding: 20px;
+    border: 1px solid var(--wsp-gray-200);
+    border-radius: var(--wsp-radius);
+    text-align: center;
+}
+.wsp-comparison-flag { font-size: 40px; margin-bottom: 8px; }
+.wsp-comparison-name { margin: 0 0 12px; font-size: 18px; }
+.wsp-comparison-metrics {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+}
+.wsp-comparison-metrics li {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--wsp-gray-100);
+    font-size: 14px;
+}
+.wsp-comparison-metrics li:last-child { border-bottom: none; }
+.wsp-comparison-metrics span { color: var(--wsp-gray-500); }
+.wsp-comparison-metrics strong { color: var(--wsp-gray-900); }
+
+/* ─── Timeline ──────────────────────────────────────── */
+.wsp-timeline {
+    position: relative;
+    padding-left: 30px;
+    margin-bottom: 24px;
+}
+.wsp-timeline-line {
+    position: absolute;
+    left: 10px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--wsp-gray-200);
+}
+.wsp-timeline-item {
+    position: relative;
+    padding-bottom: 24px;
+}
+.wsp-timeline-dot {
+    position: absolute;
+    left: -25px;
+    top: 4px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--wsp-primary);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px var(--wsp-primary-light);
+}
+.wsp-timeline-date {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--wsp-primary);
+    margin-bottom: 4px;
+}
+.wsp-timeline-body h5 { margin: 0 0 4px; font-size: 15px; }
+.wsp-timeline-body p { margin: 0; font-size: 14px; color: var(--wsp-gray-500); }
+
+/* ─── Text Block ────────────────────────────────────── */
+.wsp-text-block {
+    padding: 16px 20px;
+    background: var(--wsp-gray-50);
+    border-radius: var(--wsp-radius);
+    border-left: 4px solid var(--wsp-primary);
+    line-height: 1.7;
+    margin-bottom: 24px;
+}
+.wsp-text-block p { margin: 0; }
+.wsp-highlight {
+    background: linear-gradient(120deg, rgba(29,78,216,.1) 0%, rgba(29,78,216,.2) 100%);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+    color: var(--wsp-primary-dark);
+}
+
+/* ─── Mini Map ──────────────────────────────────────── */
+.wsp-minimap-wrap {
+    border: 1px solid var(--wsp-gray-200);
+    border-radius: var(--wsp-radius);
+    overflow: hidden;
+    margin-bottom: 24px;
+    position: relative;
+}
+.wsp-minimap { z-index: 1; }
+
+/* ─── Coordinate Grid Labels ───────────────────────── */
+.wsp-grid-label {
+    font: 10px/1 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    color: #64748b;
+    background: rgba(255,255,255,0.6);
+    padding: 1px 3px;
+    border-radius: 2px;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+}
+.wsp-grid-label-lat {
+    text-align: left;
+}
+.wsp-grid-label-lng {
+    text-align: center;
+}
+
+/* ─── Coordinate Display ───────────────────────────── */
+.wsp-coord-display {
+    font: 11px/1.4 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    color: #334155;
+    background: rgba(255,255,255,0.85);
+    padding: 2px 8px;
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 800;
+    backdrop-filter: blur(4px);
+}
+
+/* ─── Marker Popups ────────────────────────────────── */
+.wsp-marker-popup-content {
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    min-width: 120px;
+    max-width: 280px;
+}
+.wsp-marker-popup-content strong {
+    display: block;
+    font-size: 14px;
+    color: #1e293b;
+    margin-bottom: 2px;
+}
+.wsp-marker-value {
+    color: #3b82f6;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+/* ─── Pin Marker Icon ──────────────────────────────── */
+.wsp-pin-marker {
+    background: transparent !important;
+    border: none !important;
+}
+.wsp-pin-marker svg {
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3));
+}
+
+/* ─── Square / Diamond markers ─────────────────────── */
+.wsp-square-marker,
+.wsp-diamond-marker {
+    background: transparent !important;
+    border: none !important;
+}
+.wsp-square-marker > div,
+.wsp-diamond-marker > div {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* ─── Layer Control Overrides ──────────────────────── */
+.wsp-minimap-wrap .leaflet-control-layers {
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    border: 1px solid #e2e8f0;
+    padding: 8px 12px;
+    font-size: 12px;
+}
+.wsp-minimap-wrap .leaflet-control-layers label {
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.wsp-minimap-wrap .leaflet-control-layers-separator {
+    border-top: 1px solid #e2e8f0;
+    margin: 6px 0;
+}

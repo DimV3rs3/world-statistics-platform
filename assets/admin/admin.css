@@ -1,0 +1,124 @@
+/**
+ * World Statistics Platform — Admin styles.
+ */
+
+.wsp-admin-wrap {
+    max-width: 1100px;
+}
+
+.wsp-admin-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.wsp-admin-title .dashicons { font-size: 28px; width: 28px; height: 28px; color: #2271b1; }
+.wsp-version-badge {
+    font-size: 12px;
+    background: #2271b1;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 6px;
+}
+
+/* ─── Stats Cards ───────────────────────────────────── */
+.wsp-admin-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 30px;
+}
+.wsp-admin-card {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 6px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+.wsp-card-icon { font-size: 32px; width: 32px; height: 32px; color: #2271b1; margin-bottom: 8px; }
+.wsp-card-number { font-size: 28px; font-weight: 700; color: #1d2327; }
+.wsp-card-label { font-size: 13px; color: #646970; text-transform: uppercase; margin-top: 4px; }
+
+/* ─── Sections ──────────────────────────────────────── */
+.wsp-admin-section {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 6px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+.wsp-admin-section h2 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+/* ─── Extensions Grid ───────────────────────────────── */
+.wsp-ext-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+}
+.wsp-ext-card {
+    border: 1px solid #c3c4c7;
+    border-radius: 6px;
+    padding: 16px;
+}
+.wsp-ext-icon { font-size: 24px; width: 24px; height: 24px; color: #2271b1; margin-bottom: 6px; }
+.wsp-ext-version { font-size: 12px; color: #646970; }
+.wsp-ext-desc { font-size: 13px; color: #50575e; margin: 6px 0; }
+.wsp-ext-author { font-size: 12px; color: #646970; }
+
+/* ─── Quick Actions ─────────────────────────────────── */
+.wsp-quick-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.wsp-quick-actions .button .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    vertical-align: text-bottom;
+    margin-right: 4px;
+}
+
+/* ─── Extensions Table ──────────────────────────────── */
+.wsp-ext-table td,
+.wsp-ext-table th { vertical-align: middle; }
+.wsp-ext-table .dashicons { font-size: 20px; width: 20px; height: 20px; }
+
+/* ─── Empty State ───────────────────────────────────── */
+.wsp-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+}
+.wsp-empty-icon { font-size: 48px; width: 48px; height: 48px; color: #c3c4c7; }
+.wsp-empty-state h3 { margin-top: 10px; }
+
+/* ─── Developer Info ────────────────────────────────── */
+.wsp-dev-info pre {
+    background: #1d2327;
+    color: #e0e0e0;
+    padding: 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.wsp-dev-info h4 {
+    margin-top: 20px;
+    margin-bottom: 10px;
+    padding-top: 15px;
+    border-top: 1px solid #e0e0e0;
+}
+
+/* ─── Danger Zone ───────────────────────────────────── */
+.wsp-danger-zone {
+    border-color: #d63638;
+}
+
+/* ─── Meta Box ──────────────────────────────────────── */
+.wsp-meta-table th { width: 160px; }
