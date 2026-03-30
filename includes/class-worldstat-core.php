@@ -84,10 +84,23 @@ final class WorldStat_Core {
             'ajaxUrl'  => admin_url( 'admin-ajax.php' ),
             'restUrl'  => rest_url( 'worldstat/v1/' ),
             'nonce'    => wp_create_nonce( 'wp_rest' ),
+            'analysisUrl' => WorldStat_Pages::get_page_url( 'analysis' ),
             'version'  => WSP_VERSION,
         ] );
 
-        // Pre-enqueue Chart.js, Leaflet & TopoJSON on country pages so AJAX-loaded tabs can use them
+        // Pre-enqueue Chart.js on platform pages that can render charts via AJAX.
+        $analysis_page_id = WorldStat_Pages::get_page_id( 'analysis' );
+        $is_analysis = ( $analysis_page_id && is_page( $analysis_page_id ) );
+        if ( ! $is_analysis && is_page() ) {
+            $slug = (string) get_post_field( 'post_name', get_queried_object_id() );
+            $is_analysis = ( $slug === 'analysis-data' );
+        }
+        if ( $is_analysis ) {
+            wp_enqueue_script( 'chartjs', WSP_ASSETS_URL . 'vendor/chartjs/chart.umd.min.js', [], '4.4', true );
+            wp_enqueue_script( 'worldstat-chart-builder', WSP_ASSETS_URL . 'js/chart-builder.js', [ 'chartjs' ], WSP_VERSION, true );
+        }
+
+        // Pre-enqueue Leaflet & TopoJSON on country pages so AJAX-loaded tabs can use them
         if ( is_singular( WorldStat_Country_CPT::SLUG ) ) {
             // Chart.js + builder (local assets for offline support)
             wp_enqueue_script( 'chartjs', WSP_ASSETS_URL . 'vendor/chartjs/chart.umd.min.js', [], '4.4', true );
@@ -129,9 +142,16 @@ final class WorldStat_Core {
             WorldStat_Pages::get_page_id( 'countries' ),
             WorldStat_Pages::get_page_id( 'compare' ),
             WorldStat_Pages::get_page_id( 'data-themes' ),
+            WorldStat_Pages::get_page_id( 'analysis' ),
         ] );
 
         if ( is_page( $page_ids ) ) return true;
+
+        // Fallback: analysis page by slug, even if option IDs are out of sync.
+        if ( is_page() ) {
+            $slug = (string) get_post_field( 'post_name', get_queried_object_id() );
+            if ( $slug === 'analysis-data' ) return true;
+        }
 
         return (bool) apply_filters( 'worldstat_is_platform_page', false );
     }

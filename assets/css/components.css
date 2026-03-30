@@ -210,6 +210,19 @@
     color: var(--wsp-primary-dark);
 }
 
+/* ─── Ergonomics Wrapper (country overview) ─────────── */
+.wsp-ergo-wrapper {
+    margin-top: 16px;
+    padding: 16px 18px;
+    background: var(--wsp-gray-50);
+    border-radius: var(--wsp-radius);
+    border: 1px solid var(--wsp-gray-200);
+}
+.wsp-ergo-header h3 {
+    font-size: 18px;
+    margin: 0;
+}
+
 /* ─── Mini Map ──────────────────────────────────────── */
 .wsp-minimap-wrap {
     border: 1px solid var(--wsp-gray-200);

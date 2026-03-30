@@ -7,6 +7,7 @@ class WorldStat_Pages {
         'countries'   => [ 'title' => 'Страны мира',          'slug' => 'countries',   'content' => '[worldstat_countries_grid]' ],
         'compare'     => [ 'title' => 'Сравнение стран',      'slug' => 'compare',     'content' => '[worldstat_compare]' ],
         'data-themes' => [ 'title' => 'Тематические данные',  'slug' => 'data-themes', 'content' => '[worldstat_themes]' ],
+        'analysis'    => [ 'title' => 'Анализ данных',        'slug' => 'analysis-data', 'content' => '' ],
     ];
 
     public function __construct() {
@@ -17,17 +18,43 @@ class WorldStat_Pages {
         $pages = get_option( 'wsp_pages', [] );
 
         foreach ( self::PAGES as $key => $def ) {
-            if ( ! empty( $pages[ $key ] ) && get_post_status( $pages[ $key ] ) === 'publish' ) {
+            $id = ! empty( $pages[ $key ] ) ? (int) $pages[ $key ] : 0;
+            if ( $id && get_post_status( $id ) === 'publish' ) {
                 continue;
             }
 
-            $id = wp_insert_post( [
-                'post_type'    => 'page',
-                'post_title'   => $def['title'],
-                'post_name'    => $def['slug'],
-                'post_content' => $def['content'],
-                'post_status'  => 'publish',
-            ] );
+            // Fallback: reuse existing page by slug to avoid duplicates.
+            if ( ! $id ) {
+                $found = get_posts( [
+                    'post_type'      => 'page',
+                    'name'           => (string) ( $def['slug'] ?? '' ),
+                    'post_status'    => 'any',
+                    'numberposts'    => 1,
+                    'fields'         => 'ids',
+                    'suppress_filters' => true,
+                ] );
+                if ( ! empty( $found[0] ) ) {
+                    $id = (int) $found[0];
+                }
+            }
+
+            if ( ! $id ) {
+                $id = wp_insert_post( [
+                    'post_type'    => 'page',
+                    'post_title'   => $def['title'],
+                    'post_name'    => $def['slug'],
+                    'post_content' => $def['content'],
+                    'post_status'  => 'publish',
+                ] );
+            } else {
+                // Ensure correct published status.
+                wp_update_post( [
+                    'ID'           => $id,
+                    'post_title'  => $def['title'],
+                    'post_content'=> $def['content'],
+                    'post_status' => 'publish',
+                ], true );
+            }
 
             if ( $id && ! is_wp_error( $id ) ) {
                 $pages[ $key ] = $id;

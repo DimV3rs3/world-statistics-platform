@@ -9,6 +9,7 @@ $config = wp_json_encode( [
     'datasets' => $opts['datasets'],
     'xLabel'   => $opts['x_label'],
     'yLabel'   => $opts['y_label'],
+    'legend'   => $opts['legend'] ?? null,
 ] );
 ?>
 <div class="wsp-chart-wrap">

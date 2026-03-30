@@ -62,6 +62,22 @@ class WorldStat_Admin {
         $exts    = $this->extensions->get_all();
         $metrics = $this->extensions->get_all_metrics();
         $count   = wp_count_posts( WorldStat_Country_CPT::SLUG );
+
+        // Detect duplicates of analysis page by slug prefix (analysis-data*).
+        global $wpdb;
+        $slug = 'analysis-data';
+        $ids = $wpdb->get_col(
+            $wpdb->prepare(
+                "SELECT ID FROM {$wpdb->posts}
+                 WHERE post_type = 'page'
+                   AND post_name LIKE %s",
+                $slug . '%'
+            )
+        );
+        $ids = array_values( array_filter( array_map( 'intval', (array) $ids ) ) );
+        $analysis_dups_count = max( 0, count( $ids ) - 1 );
+        $analysis_dups_total = count( $ids );
+
         include WSP_PLUGIN_DIR . 'admin/views/dashboard.php';
     }
 

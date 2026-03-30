@@ -88,6 +88,22 @@ $migrated_from   = get_option( 'wsp_migrated_from_wsc', '' );
         </div>
     </div>
 
+    <?php if ( ! empty( $analysis_dups_total ) && (int) $analysis_dups_total > 1 ) : ?>
+        <div class="wsp-admin-section">
+            <h2>Анализ данных: очистка дублей</h2>
+            <p class="wsp-muted">
+                Найдено дубликатов страницы «Анализ данных» в количестве: <strong><?php echo (int) $analysis_dups_count; ?></strong>.
+                Оставим каноническую страницу со slug <code>analysis-data</code> и удалим остальные.
+            </p>
+            <p>
+                <?php
+                $url = wp_nonce_url( admin_url( 'admin.php?wsp_cleanup_analysis=1' ), 'wsp_cleanup_analysis' );
+                ?>
+                <a href="<?php echo esc_url( $url ); ?>" class="button button-primary">Очистить дубликаты</a>
+            </p>
+        </div>
+    <?php endif; ?>
+
     <!-- API Info -->
     <div class="wsp-admin-section">
         <h2>REST API</h2>

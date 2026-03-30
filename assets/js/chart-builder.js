@@ -50,7 +50,9 @@
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        display: datasets.length > 1 || type === 'pie' || type === 'doughnut',
+                        display: (config.legend !== undefined && config.legend !== null)
+                            ? !!config.legend
+                            : (datasets.length > 1 || type === 'pie' || type === 'doughnut'),
                         position: 'top',
                     },
                     title: {

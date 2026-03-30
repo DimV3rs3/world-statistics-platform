@@ -49,6 +49,7 @@ class WorldStat_Templates {
             'countries'   => 'page-countries.php',
             'compare'     => 'page-compare.php',
             'data-themes' => 'page-data-themes.php',
+            'analysis'    => 'page-analysis.php',
         ];
 
         foreach ( $map as $key => $file ) {
@@ -56,6 +57,13 @@ class WorldStat_Templates {
                 $found = $this->locate( $file );
                 if ( $found ) return $found;
             }
+        }
+
+        // Fallback by slug (handles cases when option IDs were duplicated/out of sync).
+        $slug = (string) get_post_field( 'post_name', $page_id );
+        if ( $slug === 'analysis-data' ) {
+            $found = $this->locate( 'page-analysis.php' );
+            if ( $found ) return $found;
         }
 
         return $template;

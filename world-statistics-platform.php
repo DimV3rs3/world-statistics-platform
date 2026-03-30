@@ -46,6 +46,7 @@ $wsp_includes = [
     'includes/class-worldstat-core.php',
     'includes/class-worldstat-extensions.php',
     'includes/class-worldstat-data.php',
+    'includes/class-worldstat-analysis.php',
     'includes/class-worldstat-ui.php',
     'includes/class-worldstat-country-cpt.php',
     'includes/class-worldstat-taxonomies.php',
@@ -78,3 +79,56 @@ function worldstat_platform(): WorldStat_Core {
 add_action( 'plugins_loaded', function () {
     worldstat_platform();
 }, 5 );
+
+// Ensure pages exist, but after WP is fully loaded (avoid null $wp_rewrite on early calls).
+add_action( 'wp_loaded', function () {
+    if ( ! is_admin() ) return;
+    if ( class_exists( 'WorldStat_Pages' ) ) {
+        WorldStat_Pages::create_pages();
+    }
+}, 20 );
+
+add_action( 'admin_init', function () {
+    if ( ! current_user_can( 'manage_options' ) ) return;
+    if ( empty( $_GET['wsp_cleanup_analysis'] ) ) return;
+    if ( empty( $_GET['_wpnonce'] ) ) return;
+
+    $nonce_ok = wp_verify_nonce( (string) $_GET['_wpnonce'], 'wsp_cleanup_analysis' );
+    if ( ! $nonce_ok ) return;
+
+    global $wpdb;
+    $prefix = 'analysis-data';
+
+    $ids = $wpdb->get_col(
+        $wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts}
+             WHERE post_type = 'page'
+               AND post_name LIKE %s",
+            $prefix . '%'
+        )
+    );
+    $ids = array_values( array_filter( array_map( 'intval', (array) $ids ) ) );
+    if ( count( $ids ) <= 1 ) return;
+
+    $canonical_ids = $wpdb->get_col(
+        $wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts}
+             WHERE post_type = 'page'
+               AND post_name = %s",
+            $prefix
+        )
+    );
+    $keep = ! empty( $canonical_ids ) ? (int) $canonical_ids[0] : min( $ids );
+    $to_delete = array_values( array_filter( $ids, fn($id) => (int) $id !== (int) $keep ) );
+    if ( empty( $to_delete ) ) return;
+
+    $in = implode( ',', array_map( 'intval', $to_delete ) );
+
+    $wpdb->query( "DELETE FROM {$wpdb->term_relationships} WHERE object_id IN ({$in})" );
+    $wpdb->query( "DELETE FROM {$wpdb->postmeta} WHERE post_id IN ({$in})" );
+    $wpdb->query( "DELETE FROM {$wpdb->posts} WHERE ID IN ({$in})" );
+
+    wp_cache_flush();
+    wp_redirect( admin_url( 'admin.php?wsp_cleanup_analysis_done=1' ) );
+    exit;
+} );

@@ -107,35 +107,55 @@ class WorldStat_Tabs {
     // ────────────────────────────────────────────────
     // Добавляем блок «Эргономичность» как дополнение
     // ────────────────────────────────────────────────
+
+    $analysis_url = '';
+    if ( class_exists( 'WorldStat_Pages' ) ) {
+        $analysis_url = WorldStat_Pages::get_page_url( 'analysis' );
+    }
+    // Fallback to direct slug if опция ещё не записана.
+    if ( ! $analysis_url ) {
+        $analysis_url = home_url( '/analysis-data/' );
+    }
     ?>
-         <div class="ergo-layout">
-            <!-- Вертикальное меню слева -->
-            <div class="ergo-sidebar">
-                <button class="ergo-vertical-btn active" data-target="roads">
-                    <i class="fas fa-road"></i> Дорожная сеть
-                </button>
-                <button class="ergo-vertical-btn" data-target="urban">
-                    <i class="fas fa-building"></i> Городские зоны
-                </button>
-                <button class="ergo-vertical-btn" data-target="green">
-                    <i class="fas fa-tree"></i> Зелёные зоны
-                </button>
-                <button class="ergo-vertical-btn" data-target="biodiversity">
-                    <i class="fas fa-paw"></i> Биоразнообразие
-                </button>
-                <button class="ergo-vertical-btn" data-target="industry">
-                    <i class="fas fa-industry"></i> Промышленность
-                </button>
-                <button class="ergo-vertical-btn" data-target="tech">
-                    <i class="fas fa-microchip"></i> Технологии
-                </button>
+         <div class="wsp-ergo-wrapper" style="margin-top: 16px;">
+            <div class="wsp-ergo-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
+                <h3 style="margin:0;font-size:18px;color:var(--wsp-gray-900);">Эргономичность</h3>
+                <?php if ( ! empty( $analysis_url ) ) : ?>
+                    <a class="wsp-btn wsp-btn-sm wsp-btn-outline" href="<?php echo esc_url( $analysis_url ); ?>">
+                        <span class="dashicons dashicons-chart-bar" style="font-size:16px;line-height:1;"></span> Анализ
+                    </a>
+                <?php endif; ?>
             </div>
 
-            <!-- Правая панель с информацией и графиками -->
-            <div class="ergo-content" id="ergoContent">
-                <!-- Контент подгружается через JavaScript -->
+            <div class="ergo-layout">
+                <!-- Вертикальное меню слева -->
+                <div class="ergo-sidebar">
+                    <button class="ergo-vertical-btn active" data-target="roads">
+                        <i class="fas fa-road"></i> Дорожная сеть
+                    </button>
+                    <button class="ergo-vertical-btn" data-target="urban">
+                        <i class="fas fa-building"></i> Городские зоны
+                    </button>
+                    <button class="ergo-vertical-btn" data-target="green">
+                        <i class="fas fa-tree"></i> Зелёные зоны
+                    </button>
+                    <button class="ergo-vertical-btn" data-target="biodiversity">
+                        <i class="fas fa-paw"></i> Биоразнообразие
+                    </button>
+                    <button class="ergo-vertical-btn" data-target="industry">
+                        <i class="fas fa-industry"></i> Промышленность
+                    </button>
+                    <button class="ergo-vertical-btn" data-target="tech">
+                        <i class="fas fa-microchip"></i> Технологии
+                    </button>
+                </div>
+
+                <!-- Правая панель с информацией и графиками -->
+                <div class="ergo-content" id="ergoContent">
+                    <!-- Контент подгружается через JavaScript -->
+                </div>
             </div>
-        </div>
+         </div>
     <?php
     // ────────────────────────────────────────────────
 
