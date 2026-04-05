@@ -16,7 +16,11 @@ class WorldStat_Admin {
 
         // Priority 5 — register BEFORE extensions (default priority 10)
         add_action( 'admin_menu', [ $this, 'register_menus' ], 5 );
+        // CSV upload/delete must run before admin-header (redirect); page callback runs too late.
+        add_action( 'admin_init', [ $this, 'handle_csv_admin_post' ], 0 );
+        add_action( 'admin_init', [ $this, 'maybe_redirect_stale_csv_error' ], 1 );
         add_action( 'admin_init', [ $this, 'register_settings' ] );
+        add_action( 'admin_post_wsp_csv_delete', [ $this, 'handle_csv_delete_post' ] );
 
         // Custom columns for country list
         add_filter( 'manage_' . WorldStat_Country_CPT::SLUG . '_posts_columns',  [ $this, 'columns' ] );
@@ -44,6 +48,9 @@ class WorldStat_Admin {
         // Extensions Manager
         add_submenu_page( 'worldstat', 'Расширения', 'Расширения', 'manage_options', 'worldstat-extensions', [ $this, 'page_extensions' ] );
 
+        // User CSV uploads
+        add_submenu_page( 'worldstat', 'Данные CSV', 'Данные CSV', 'manage_options', 'worldstat-csv', [ $this, 'page_csv_data' ] );
+
         // Settings
         add_submenu_page( 'worldstat', 'Настройки', 'Настройки', 'manage_options', 'worldstat-settings', [ $this, 'page_settings' ] );
     }
@@ -52,6 +59,102 @@ class WorldStat_Admin {
         register_setting( 'wsp_settings', 'wsp_map_on_front', [ 'type' => 'boolean', 'default' => true ] );
         register_setting( 'wsp_settings', 'wsp_countries_per_page', [ 'type' => 'integer', 'default' => 200 ] );
         register_setting( 'wsp_settings', 'wsp_enable_rest_public', [ 'type' => 'boolean', 'default' => true ] );
+    }
+
+    /**
+     * Drop ?wsp_csv_msg=error from URL after the flash message was already shown (avoid bogus notice on refresh).
+     */
+    public function maybe_redirect_stale_csv_error(): void {
+        if ( ! isset( $_GET['page'] ) || sanitize_text_field( wp_unslash( $_GET['page'] ) ) !== 'worldstat-csv' ) {
+            return;
+        }
+        if ( ! isset( $_GET['wsp_csv_msg'] ) || sanitize_key( wp_unslash( $_GET['wsp_csv_msg'] ) ) !== 'error' ) {
+            return;
+        }
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+        if ( WorldStat_Uploaded_Csv::has_admin_error_flash() ) {
+            return;
+        }
+        wp_safe_redirect( admin_url( 'admin.php?page=worldstat-csv' ) );
+        exit;
+    }
+
+    /**
+     * Process CSV admin forms before any HTML output (see wp-admin/admin.php: admin_init → admin-header → page callback).
+     */
+    public function handle_csv_admin_post(): void {
+        if ( ! isset( $_GET['page'] ) || sanitize_text_field( wp_unslash( $_GET['page'] ) ) !== 'worldstat-csv' ) {
+            return;
+        }
+        if ( ! isset( $_POST['wsp_csv_nonce'] ) ) {
+            return;
+        }
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Недостаточно прав.', 'flavor-worldstat' ), '', [ 'response' => 403 ] );
+        }
+
+        $nonce = sanitize_text_field( wp_unslash( $_POST['wsp_csv_nonce'] ) );
+        if ( ! wp_verify_nonce( $nonce, 'wsp_csv_manage' ) ) {
+            wp_die( esc_html__( 'Неверный запрос.', 'flavor-worldstat' ), '', [ 'response' => 403 ] );
+        }
+
+        $action   = sanitize_text_field( wp_unslash( $_POST['wsp_csv_form_action'] ?? '' ) );
+        $redirect = admin_url( 'admin.php?page=worldstat-csv' );
+
+        if ( $action === 'upload' && ! empty( $_FILES['wsp_csv_file'] ) ) {
+            $result = WorldStat_Uploaded_Csv::save_upload( $_FILES['wsp_csv_file'] );
+            if ( is_wp_error( $result ) ) {
+                WorldStat_Uploaded_Csv::set_admin_error_flash( $result->get_error_message() );
+                wp_safe_redirect( add_query_arg( 'wsp_csv_msg', 'error', $redirect ) );
+                exit;
+            }
+            WorldStat_Uploaded_Csv::bump_files_revision();
+            wp_safe_redirect(
+                add_query_arg(
+                    [
+                        'wsp_csv_msg'  => 'upload_ok',
+                        'wsp_csv_file' => $result,
+                    ],
+                    $redirect
+                )
+            );
+            exit;
+        }
+
+    }
+
+    /**
+     * Delete uploaded CSV via admin-post.php (avoids POST to admin.php losing ?page= and runs before any output).
+     */
+    public function handle_csv_delete_post(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Недостаточно прав.', 'flavor-worldstat' ), '', [ 'response' => 403 ] );
+        }
+        check_admin_referer( 'wsp_csv_delete' );
+
+        $name = wp_basename( wp_unslash( $_REQUEST['wsp_csv_delete_name'] ?? '' ) );
+        $result = WorldStat_Uploaded_Csv::delete_file( $name );
+        $back   = admin_url( 'admin.php?page=worldstat-csv' );
+
+        if ( is_wp_error( $result ) ) {
+            WorldStat_Uploaded_Csv::set_admin_error_flash( $result->get_error_message() );
+            wp_safe_redirect( add_query_arg( 'wsp_csv_msg', 'error', $back ) );
+            exit;
+        }
+
+        WorldStat_Uploaded_Csv::bump_files_revision();
+        wp_safe_redirect(
+            add_query_arg(
+                [
+                    'wsp_csv_msg'  => 'delete_ok',
+                    'wsp_csv_file' => $name,
+                ],
+                $back
+            )
+        );
+        exit;
     }
 
     /* ═══════════════════════════════════════════════════════
@@ -90,6 +193,15 @@ class WorldStat_Admin {
 
     public function page_settings(): void {
         include WSP_PLUGIN_DIR . 'admin/views/settings.php';
+    }
+
+    public function page_csv_data(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Недостаточно прав.', 'flavor-worldstat' ) );
+        }
+
+        $wsp_csv_files = WorldStat_Uploaded_Csv::list_files();
+        include WSP_PLUGIN_DIR . 'admin/views/csv-data.php';
     }
 
     /* ═══════════════════════════════════════════════════════

@@ -57,6 +57,8 @@ $wsp_includes = [
     'includes/class-worldstat-map.php',
     'includes/class-worldstat-installer.php',
     'includes/class-worldstat-pages.php',
+    'includes/class-worldstat-uploaded-csv.php',
+    'includes/class-worldstat-csv-cleaner.php',
     'admin/class-worldstat-admin.php',
 ];
 

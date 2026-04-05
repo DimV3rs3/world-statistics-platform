@@ -35,17 +35,34 @@ function wsp_csv_preview( string $abs_path, int $limit = 18 ): string {
     return implode( "\n", $lines );
 }
 
-$csv_dir = WSP_PLUGIN_DIR . 'csv_data/';
-$files = glob( $csv_dir . '*.csv' ) ?: [];
-$samples = [];
+$samples       = [];
+$sample_labels = [];
 
-foreach ( $files as $path ) {
-    $key = basename( $path, '.csv' );
-    $samples[ $key ] = wsp_csv_preview( $path, 18 );
+if ( class_exists( 'WorldStat_Uploaded_Csv' ) ) {
+    foreach ( WorldStat_Uploaded_Csv::list_files() as $row ) {
+        $path = $row['path'] ?? '';
+        if ( $path === '' || ! is_readable( $path ) ) {
+            continue;
+        }
+        $fname = $row['name'] ?? basename( $path );
+        $base  = basename( $path, '.csv' );
+        $key   = preg_replace( '/[^a-zA-Z0-9_-]/', '_', $base );
+        if ( $key === '' || $key === '_' ) {
+            $key = 'file_' . substr( md5( $path ), 0, 8 );
+        }
+        $orig_key = $key;
+        $n        = 1;
+        while ( isset( $samples[ $key ] ) ) {
+            $key = $orig_key . '_' . $n;
+            ++$n;
+        }
+        $samples[ $key ]       = wsp_csv_preview( $path, 18 );
+        $sample_labels[ $key ] = $fname;
+    }
 }
 
-$default_key = 'population_total';
-$default_csv = $samples[ $default_key ] ?? ( reset( $samples ) ?: '' );
+$default_key = ! empty( $samples ) ? array_key_first( $samples ) : null;
+$default_csv = ( $default_key !== null && isset( $samples[ $default_key ] ) ) ? $samples[ $default_key ] : '';
 ?>
 
 <div class="wsp-analysis-page">
@@ -63,7 +80,7 @@ $default_csv = $samples[ $default_key ] ?? ( reset( $samples ) ?: '' );
                     <select id="wsp-analysis-source" class="wsp-select">
                         <option value="custom">Кастомный CSV</option>
                         <?php foreach ( array_keys( $samples ) as $k ) : ?>
-                            <option value="<?php echo esc_attr( $k ); ?>"><?php echo esc_html( $k ); ?></option>
+                            <option value="<?php echo esc_attr( $k ); ?>"><?php echo esc_html( $sample_labels[ $k ] ?? $k ); ?></option>
                         <?php endforeach; ?>
                     </select>
                     <p class="wsp-muted" style="margin:6px 0 0;">

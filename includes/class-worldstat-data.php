@@ -10,14 +10,6 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class WorldStat_Data {
 
     private WorldStat_Extensions $extensions;
-    private const CSV_DATA_DIR = 'csv_data/';
-    private const COUNTRY_CSV_FILES = [
-        'population_total.csv'       => 'Общая численность населения',
-        'surface_area_sqkm.csv'      => 'Площадь поверхности (км²)',
-        'largest_city_population.csv'=> 'Население крупнейшего города',
-        'forest_percentage.csv'      => 'Лесные площади (%)',
-        'urban_land_area_sqkm.csv'   => 'Городская территория (км²)',
-    ];
 
     public function __construct( WorldStat_Extensions $extensions ) {
         $this->extensions = $extensions;
@@ -241,16 +233,25 @@ class WorldStat_Data {
      * Get values from all configured CSV files for country ISO3.
      */
     private function get_country_csv_rows( string $iso3 ): array {
-        $cache_key = 'wsp_csv_country_' . strtolower( $iso3 );
-        $cached = get_transient( $cache_key );
+        if ( ! class_exists( 'WorldStat_Uploaded_Csv' ) ) {
+            return [];
+        }
+
+        $rev = (int) get_option( 'wsp_csv_files_revision', 0 );
+        $cache_key = 'wsp_csv_country_' . strtolower( $iso3 ) . '_r' . $rev;
+        $cached    = get_transient( $cache_key );
         if ( is_array( $cached ) && $this->is_valid_country_csv_cache( $cached ) ) {
             return $cached;
         }
 
         $rows = [];
 
-        foreach ( self::COUNTRY_CSV_FILES as $file => $label ) {
-            $full_path = WSP_PLUGIN_DIR . self::CSV_DATA_DIR . $file;
+        foreach ( WorldStat_Uploaded_Csv::list_files() as $file_row ) {
+            $full_path = $file_row['path'] ?? '';
+            if ( $full_path === '' || ! is_readable( $full_path ) ) {
+                continue;
+            }
+
             $series = $this->read_country_csv_series( $full_path, $iso3 );
 
             if ( empty( $series ) ) {
@@ -261,7 +262,7 @@ class WorldStat_Data {
             $latest_year = (int) array_key_first( $series );
 
             $rows[] = [
-                'label' => $label,
+                'label' => $this->label_from_uploaded_csv_name( $file_row['name'] ?? '' ),
                 'year'  => $latest_year,
                 'value' => (float) $series[ $latest_year ],
                 'years' => $series,
@@ -270,6 +271,15 @@ class WorldStat_Data {
 
         set_transient( $cache_key, $rows, HOUR_IN_SECONDS * 6 );
         return $rows;
+    }
+
+    /**
+     * Human label for a metric row from uploaded filename.
+     */
+    private function label_from_uploaded_csv_name( string $filename ): string {
+        $base = basename( $filename, '.csv' );
+        $base = str_replace( [ '_', '-' ], ' ', $base );
+        return $base !== '' ? $base : $filename;
     }
 
     /**

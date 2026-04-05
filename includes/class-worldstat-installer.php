@@ -28,6 +28,10 @@ class WorldStat_Installer {
         update_option( 'wsp_version', WSP_VERSION );
         update_option( 'wsp_activated', time() );
 
+        if ( class_exists( 'WorldStat_Uploaded_Csv' ) ) {
+            WorldStat_Uploaded_Csv::ensure_dir();
+        }
+
         do_action( 'worldstat_activated' );
     }
 
