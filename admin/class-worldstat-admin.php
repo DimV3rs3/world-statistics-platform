@@ -104,13 +104,14 @@ class WorldStat_Admin {
         $redirect = admin_url( 'admin.php?page=worldstat-csv' );
 
         if ( $action === 'upload' && ! empty( $_FILES['wsp_csv_file'] ) ) {
-            $result = WorldStat_Uploaded_Csv::save_upload( $_FILES['wsp_csv_file'] );
+            $kind_raw = isset( $_POST['wsp_csv_dataset_kind'] ) ? sanitize_key( wp_unslash( $_POST['wsp_csv_dataset_kind'] ) ) : WorldStat_Uploaded_Csv::KIND_COUNTRY;
+            $kind     = WorldStat_Uploaded_Csv::sanitize_dataset_kind( $kind_raw );
+            $result   = WorldStat_Uploaded_Csv::save_upload( $_FILES['wsp_csv_file'], $kind );
             if ( is_wp_error( $result ) ) {
                 WorldStat_Uploaded_Csv::set_admin_error_flash( $result->get_error_message() );
                 wp_safe_redirect( add_query_arg( 'wsp_csv_msg', 'error', $redirect ) );
                 exit;
             }
-            WorldStat_Uploaded_Csv::bump_files_revision();
             wp_safe_redirect(
                 add_query_arg(
                     [
@@ -144,7 +145,6 @@ class WorldStat_Admin {
             exit;
         }
 
-        WorldStat_Uploaded_Csv::bump_files_revision();
         wp_safe_redirect(
             add_query_arg(
                 [

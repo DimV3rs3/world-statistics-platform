@@ -2,7 +2,7 @@
 /**
  * Admin: uploaded CSV datasets.
  *
- * @var list<array{name:string,path:string,size:int,mtime:int}> $wsp_csv_files
+ * @var list<array{id:int,name:string,dataset_kind:string,size:int,mtime:int}> $wsp_csv_files
  */
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -10,8 +10,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 $wsp_csv_msg   = isset( $_GET['wsp_csv_msg'] ) ? sanitize_key( wp_unslash( $_GET['wsp_csv_msg'] ) ) : '';
 $wsp_csv_file  = isset( $_GET['wsp_csv_file'] ) ? sanitize_file_name( wp_unslash( $_GET['wsp_csv_file'] ) ) : '';
-$upload_dir    = WorldStat_Uploaded_Csv::get_dir();
-$wsp_csv_page = admin_url( 'admin.php?page=worldstat-csv' );
+$wsp_csv_ready = WorldStat_Uploaded_Csv::is_storage_ready();
+$wsp_csv_table = WorldStat_Uploaded_Csv::table_name();
+$wsp_csv_page   = admin_url( 'admin.php?page=worldstat-csv' );
+$wsp_kind_labels = WorldStat_Uploaded_Csv::dataset_kind_labels();
 ?>
 <div class="wrap wsp-admin-wrap">
 	<h1 class="wsp-admin-title">
@@ -26,7 +28,7 @@ $wsp_csv_page = admin_url( 'admin.php?page=worldstat-csv' );
 			echo esc_html(
 				sprintf(
 					/* translators: %s: file name */
-					__( 'Файл «%s» прошёл очистку по схеме (8 шагов) и сохранён.', 'flavor-worldstat' ),
+					__( 'Файл «%s» прошёл очистку по схеме (8 шагов) и сохранён в базе данных.', 'flavor-worldstat' ),
 					$wsp_csv_file
 				)
 			);
@@ -70,17 +72,39 @@ $wsp_csv_page = admin_url( 'admin.php?page=worldstat-csv' );
 	<div class="wsp-admin-section">
 		<h2><?php esc_html_e( 'Загрузить CSV', 'flavor-worldstat' ); ?></h2>
 		<p class="description">
-			<?php esc_html_e( 'CSV сначала принимается во временную папку, затем автоматически проходит очистку (дубликаты, пропуски, типы, выбросы, строки и т.д.). В каталог данных попадает только успешно обработанный файл.', 'flavor-worldstat' ); ?>
+			<?php esc_html_e( 'CSV принимается во временную папку, проходит очистку (дубликаты, пропуски, типы, выбросы, строки и т.д.), затем сохраняется в таблицу MySQL WordPress. Постоянное хранение — в базе, не в виде отдельных CSV-файлов.', 'flavor-worldstat' ); ?>
 		</p>
-		<?php if ( $upload_dir === '' ) : ?>
-			<p class="notice notice-error inline"><strong><?php esc_html_e( 'Каталог загрузок недоступен. Проверьте права на wp-content/uploads.', 'flavor-worldstat' ); ?></strong></p>
+		<?php if ( ! $wsp_csv_ready ) : ?>
+			<p class="notice notice-error inline"><strong><?php esc_html_e( 'Хранилище недоступно: проверьте права на wp-content/uploads и что таблица БД создана (переактивируйте плагин при необходимости).', 'flavor-worldstat' ); ?></strong></p>
 		<?php else : ?>
 			<p class="description" style="margin-top:8px;">
-				<code><?php echo esc_html( $upload_dir ); ?></code>
+				<?php esc_html_e( 'Таблица:', 'flavor-worldstat' ); ?>
+				<code><?php echo esc_html( $wsp_csv_table ); ?></code>
 			</p>
 			<form method="post" enctype="multipart/form-data" action="<?php echo esc_url( $wsp_csv_page ); ?>" style="margin-top:12px;">
 				<?php wp_nonce_field( 'wsp_csv_manage', 'wsp_csv_nonce' ); ?>
 				<input type="hidden" name="wsp_csv_form_action" value="upload" />
+				<fieldset class="wsp-csv-kind-fieldset" style="margin:12px 0;border:1px solid #c3c4c7;padding:12px 14px;">
+					<legend style="font-weight:600;padding:0 6px;">
+						<?php esc_html_e( 'Тип данных', 'flavor-worldstat' ); ?>
+					</legend>
+					<p style="margin:0 0 10px;">
+						<label style="display:block;margin-bottom:8px;">
+							<input type="radio" name="wsp_csv_dataset_kind" value="<?php echo esc_attr( WorldStat_Uploaded_Csv::KIND_COUNTRY ); ?>" checked />
+							<?php echo esc_html( $wsp_kind_labels[ WorldStat_Uploaded_Csv::KIND_COUNTRY ] ?? '' ); ?>
+						</label>
+						<span class="description" style="display:block;margin:-4px 0 10px 24px;">
+							<?php esc_html_e( 'Справочные ряды по странам: население, площадь, столица и аналогичные показатели. Используются на страницах стран. Очистка без агрессивного IQR по колонке значений.', 'flavor-worldstat' ); ?>
+						</span>
+						<label style="display:block;margin-bottom:4px;">
+							<input type="radio" name="wsp_csv_dataset_kind" value="<?php echo esc_attr( WorldStat_Uploaded_Csv::KIND_INDICATOR ); ?>" />
+							<?php echo esc_html( $wsp_kind_labels[ WorldStat_Uploaded_Csv::KIND_INDICATOR ] ?? '' ); ?>
+						</label>
+						<span class="description" style="display:block;margin:0 0 0 24px;">
+							<?php esc_html_e( 'Индикаторы для аналитики и составных индексов: дороги, урбанизация, леса и т.д. На страницах стран не показываются. Включён режим analytics (в т.ч. IQR по числовым колонкам).', 'flavor-worldstat' ); ?>
+						</span>
+					</p>
+				</fieldset>
 				<p>
 					<input type="file" name="wsp_csv_file" accept=".csv,text/csv" required />
 				</p>
@@ -105,6 +129,7 @@ $wsp_csv_page = admin_url( 'admin.php?page=worldstat-csv' );
 				<thead>
 					<tr>
 						<th><?php esc_html_e( 'Файл', 'flavor-worldstat' ); ?></th>
+						<th><?php esc_html_e( 'Тип', 'flavor-worldstat' ); ?></th>
 						<th><?php esc_html_e( 'Размер', 'flavor-worldstat' ); ?></th>
 						<th><?php esc_html_e( 'Изменён', 'flavor-worldstat' ); ?></th>
 						<th><?php esc_html_e( 'Действия', 'flavor-worldstat' ); ?></th>
@@ -114,6 +139,7 @@ $wsp_csv_page = admin_url( 'admin.php?page=worldstat-csv' );
 					<?php foreach ( $wsp_csv_files as $row ) : ?>
 						<tr>
 							<td><code><?php echo esc_html( $row['name'] ); ?></code></td>
+							<td><?php echo esc_html( $wsp_kind_labels[ $row['dataset_kind'] ] ?? $row['dataset_kind'] ); ?></td>
 							<td><?php echo esc_html( size_format( $row['size'] ) ); ?></td>
 							<td><?php echo esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $row['mtime'] ) ); ?></td>
 							<td>

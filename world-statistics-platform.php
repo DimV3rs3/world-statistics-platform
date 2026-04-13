@@ -82,6 +82,20 @@ add_action( 'plugins_loaded', function () {
     worldstat_platform();
 }, 5 );
 
+/** Таблица CSV и перенос старых файлов из uploads без повторной активации плагина. */
+add_action(
+    'plugins_loaded',
+    static function () {
+        if ( ! class_exists( 'WorldStat_Uploaded_Csv' ) ) {
+            return;
+        }
+        WorldStat_Uploaded_Csv::install_db();
+        WorldStat_Uploaded_Csv::ensure_dir();
+        WorldStat_Uploaded_Csv::migrate_legacy_files_from_disk();
+    },
+    7
+);
+
 // Ensure pages exist, but after WP is fully loaded (avoid null $wp_rewrite on early calls).
 add_action( 'wp_loaded', function () {
     if ( ! is_admin() ) return;

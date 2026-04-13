@@ -247,12 +247,22 @@ class WorldStat_Data {
         $rows = [];
 
         foreach ( WorldStat_Uploaded_Csv::list_files() as $file_row ) {
-            $full_path = $file_row['path'] ?? '';
-            if ( $full_path === '' || ! is_readable( $full_path ) ) {
+            $kind = (string) ( $file_row['dataset_kind'] ?? WorldStat_Uploaded_Csv::KIND_COUNTRY );
+            if ( $kind !== WorldStat_Uploaded_Csv::KIND_COUNTRY ) {
                 continue;
             }
 
-            $series = $this->read_country_csv_series( $full_path, $iso3 );
+            $id = (int) ( $file_row['id'] ?? 0 );
+            if ( $id < 1 ) {
+                continue;
+            }
+
+            $csv_body = WorldStat_Uploaded_Csv::get_body_by_id( $id );
+            if ( $csv_body === '' ) {
+                continue;
+            }
+
+            $series = $this->read_country_csv_series_from_string( $csv_body, $iso3 );
 
             if ( empty( $series ) ) {
                 continue;
@@ -308,24 +318,26 @@ class WorldStat_Data {
     }
 
     /**
-     * Read one CSV and return all year=>value rows for ISO3 country.
+     * Разбор CSV-текста (ISO3, год, значение): первая непустая строка — заголовок.
+     *
+     * @return array<int,float>
      */
-    private function read_country_csv_series( string $file_path, string $iso3 ): array {
-        if ( ! file_exists( $file_path ) ) {
-            return [];
-        }
+    private function read_country_csv_series_from_string( string $csv_body, string $iso3 ): array {
+        $series     = [];
+        $skip_first = true;
 
-        $handle = fopen( $file_path, 'r' );
-        if ( ! $handle ) {
-            return [];
-        }
+        foreach ( preg_split( "/\r\n|\n|\r/", $csv_body ) as $line ) {
+            $line = trim( $line );
+            if ( $line === '' ) {
+                continue;
+            }
 
-        $series = [];
+            $row = str_getcsv( $line );
+            if ( $skip_first ) {
+                $skip_first = false;
+                continue;
+            }
 
-        // Skip header
-        fgetcsv( $handle );
-
-        while ( ( $row = fgetcsv( $handle ) ) !== false ) {
             if ( count( $row ) < 3 ) {
                 continue;
             }
@@ -334,19 +346,16 @@ class WorldStat_Data {
                 continue;
             }
 
-            $year = (int) $row[1];
+            $year  = (int) $row[1];
             $value = is_numeric( $row[2] ) ? (float) $row[2] : null;
 
-            if ( null === $value ) {
+            if ( null === $value || $year <= 0 ) {
                 continue;
             }
 
-            if ( $year > 0 ) {
-                $series[ $year ] = $value;
-            }
+            $series[ $year ] = $value;
         }
 
-        fclose( $handle );
         return $series;
     }
 

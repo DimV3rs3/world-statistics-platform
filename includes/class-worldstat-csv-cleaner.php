@@ -68,6 +68,14 @@ class WorldStat_Csv_Cleaner {
 		$data = $this->clean_strings( $data );
 		$data = $this->feature_engineering( $data );
 		$data = $this->encode_and_normalize( $data );
+		$data = $this->remove_rows_without_numeric_value( $data );
+
+		if ( count( $data ) < 2 ) {
+			return new \WP_Error(
+				'wsp_csv_clean',
+				__( 'После очистки не осталось строк с числовым значением в колонке показателя (3-я колонка).', 'flavor-worldstat' )
+			);
+		}
 
 		if ( $output_path === null ) {
 			$output_path = preg_replace( '/\.csv$/i', '_cleaned.csv', $file_path );
@@ -503,6 +511,72 @@ class WorldStat_Csv_Cleaner {
 		array_unshift( $data, $header );
 		$this->log_step( 'Analytics: применены опции MinMax / label encoding' );
 		return $data;
+	}
+
+	/**
+	 * Удаляет строки данных, где в третьей колонке нет конечного числа (типичный формат: код, год, значение).
+	 * Иначе в БД и файле остаются «ABW,1960,» с пустым показателем.
+	 *
+	 * @param list<list<string|int|float|null>> $data
+	 * @return list<list<string|int|float|null>>
+	 */
+	private function remove_rows_without_numeric_value( array $data ): array {
+		if ( count( $data ) < 2 ) {
+			return $data;
+		}
+
+		$header = array_shift( $data );
+		$width  = count( $header );
+		if ( $width < 3 ) {
+			array_unshift( $data, $header );
+			$this->log_step( 'Целостность: меньше трёх колонок — отбор по значению не применяется' );
+			return $data;
+		}
+
+		$before = count( $data );
+		$kept   = array();
+
+		foreach ( $data as $row ) {
+			if ( ! is_array( $row ) || count( $row ) < 3 ) {
+				continue;
+			}
+			$v = $row[2] ?? null;
+			if ( $v === null || $v === '' ) {
+				continue;
+			}
+			if ( is_int( $v ) || is_float( $v ) ) {
+				if ( is_float( $v ) && ! is_finite( $v ) ) {
+					continue;
+				}
+				$kept[] = $row;
+				continue;
+			}
+			if ( is_string( $v ) ) {
+				$t = trim( $v );
+				if ( $t === '' || ! is_numeric( $t ) ) {
+					continue;
+				}
+				$fv = (float) $t + 0.0;
+				if ( ! is_finite( $fv ) ) {
+					continue;
+				}
+				$row[2] = strpos( $t, '.' ) !== false || stripos( $t, 'e' ) !== false ? $fv : (int) $t;
+				$kept[] = $row;
+			}
+		}
+
+		array_unshift( $kept, $header );
+		$data_rows_left = count( $kept ) - 1;
+		$removed        = max( 0, $before - $data_rows_left );
+		$this->log_step(
+			sprintf(
+				'Целостность: удалено строк без числового значения в 3-й колонке: %d (осталось строк данных: %d)',
+				$removed,
+				$data_rows_left
+			)
+		);
+
+		return $kept;
 	}
 
 	/**

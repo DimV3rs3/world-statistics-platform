@@ -29,7 +29,9 @@ class WorldStat_Installer {
         update_option( 'wsp_activated', time() );
 
         if ( class_exists( 'WorldStat_Uploaded_Csv' ) ) {
+            WorldStat_Uploaded_Csv::install_db();
             WorldStat_Uploaded_Csv::ensure_dir();
+            WorldStat_Uploaded_Csv::migrate_legacy_files_from_disk();
         }
 
         do_action( 'worldstat_activated' );

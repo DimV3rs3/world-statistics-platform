@@ -17,20 +17,19 @@ wp_enqueue_style(
 );
 
 /**
- * Read CSV preview lines (for UI defaults).
+ * Первые строки CSV из текста (для превью в UI).
  */
-function wsp_csv_preview( string $abs_path, int $limit = 18 ): string {
-    if ( ! file_exists( $abs_path ) ) return '';
-
-    $f = new SplFileObject( $abs_path );
+function wsp_csv_preview_from_string( string $csv, int $limit = 18 ): string {
     $lines = [];
-    $i = 0;
-    foreach ( $f as $line ) {
-        if ( $i >= $limit ) break;
+    foreach ( preg_split( "/\r\n|\n|\r/", $csv ) as $line ) {
         $line = rtrim( (string) $line, "\r\n" );
-        if ( $line === '' ) continue;
+        if ( $line === '' ) {
+            continue;
+        }
         $lines[] = $line;
-        $i++;
+        if ( count( $lines ) >= $limit ) {
+            break;
+        }
     }
     return implode( "\n", $lines );
 }
@@ -39,25 +38,22 @@ $samples       = [];
 $sample_labels = [];
 
 if ( class_exists( 'WorldStat_Uploaded_Csv' ) ) {
+    $wsp_csv_kind_lbl = WorldStat_Uploaded_Csv::dataset_kind_labels();
     foreach ( WorldStat_Uploaded_Csv::list_files() as $row ) {
-        $path = $row['path'] ?? '';
-        if ( $path === '' || ! is_readable( $path ) ) {
+        $id = (int) ( $row['id'] ?? 0 );
+        if ( $id < 1 ) {
             continue;
         }
-        $fname = $row['name'] ?? basename( $path );
-        $base  = basename( $path, '.csv' );
-        $key   = preg_replace( '/[^a-zA-Z0-9_-]/', '_', $base );
-        if ( $key === '' || $key === '_' ) {
-            $key = 'file_' . substr( md5( $path ), 0, 8 );
+        $body = WorldStat_Uploaded_Csv::get_body_by_id( $id );
+        if ( $body === '' ) {
+            continue;
         }
-        $orig_key = $key;
-        $n        = 1;
-        while ( isset( $samples[ $key ] ) ) {
-            $key = $orig_key . '_' . $n;
-            ++$n;
-        }
-        $samples[ $key ]       = wsp_csv_preview( $path, 18 );
-        $sample_labels[ $key ] = $fname;
+        $key      = 'db_' . $id;
+        $kind_key = (string) ( $row['dataset_kind'] ?? WorldStat_Uploaded_Csv::KIND_COUNTRY );
+        $kind_txt = $wsp_csv_kind_lbl[ $kind_key ] ?? $kind_key;
+        $fname    = $row['name'] ?? $key;
+        $samples[ $key ]       = wsp_csv_preview_from_string( $body, 18 );
+        $sample_labels[ $key ] = $fname . ' — ' . $kind_txt;
     }
 }
 
