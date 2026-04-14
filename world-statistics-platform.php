@@ -59,6 +59,7 @@ $wsp_includes = [
     'includes/class-worldstat-pages.php',
     'includes/class-worldstat-uploaded-csv.php',
     'includes/class-worldstat-csv-cleaner.php',
+    'includes/class-worldstat-csv-country-meta-importer.php',
     'admin/class-worldstat-admin.php',
 ];
 
@@ -68,6 +69,8 @@ foreach ( $wsp_includes as $file ) {
         require_once $path;
     }
 }
+
+add_action( 'worldstat_init', array( 'WorldStat_Csv_Country_Meta_Importer', 'register_extension' ), 15 );
 
 /* ─── Activation / Deactivation ─────────────────────────────── */
 register_activation_hook( __FILE__, [ 'WorldStat_Installer', 'activate' ] );

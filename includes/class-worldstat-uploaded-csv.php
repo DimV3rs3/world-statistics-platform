@@ -70,6 +70,7 @@ class WorldStat_Uploaded_Csv {
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			file_name varchar(255) NOT NULL,
 			dataset_kind varchar(32) NOT NULL DEFAULT 'country_core',
+			import_metric_slugs text NULL,
 			body longtext NOT NULL,
 			created_gmt datetime NOT NULL,
 			updated_gmt datetime NOT NULL,
@@ -226,14 +227,15 @@ class WorldStat_Uploaded_Csv {
 			$ok = $wpdb->insert(
 				$table,
 				array(
-					'file_name'    => $name,
-					'dataset_kind' => self::KIND_COUNTRY,
-					'body'         => $body,
-					'created_gmt'  => $now,
-					'updated_gmt'  => $now,
-					'author_id'    => 0,
+					'file_name'             => $name,
+					'dataset_kind'          => self::KIND_COUNTRY,
+					'import_metric_slugs'   => null,
+					'body'                  => $body,
+					'created_gmt'           => $now,
+					'updated_gmt'           => $now,
+					'author_id'             => 0,
 				),
-				array( '%s', '%s', '%s', '%s', '%s', '%d' )
+				array( '%s', '%s', '%s', '%s', '%s', '%s', '%d' )
 			);
 			if ( $ok ) {
 				@unlink( $path );
@@ -410,22 +412,59 @@ class WorldStat_Uploaded_Csv {
 			return new \WP_Error( 'wsp_csv_read', __( 'Не удалось прочитать результат очистки.', 'flavor-worldstat' ) );
 		}
 
-		if ( ! empty( $result['log'] ) && is_array( $result['log'] ) ) {
-			self::set_process_log_flash( $result['log'] );
+		$proc_log = ( ! empty( $result['log'] ) && is_array( $result['log'] ) ) ? $result['log'] : array();
+
+		$imp = array(
+			'posts_touched'   => 0,
+			'rows_written'    => 0,
+			'rows_skipped'    => 0,
+			'unknown_country' => 0,
+			'metrics'         => array(),
+		);
+		if ( class_exists( 'WorldStat_Csv_Country_Meta_Importer' ) ) {
+			$imp = WorldStat_Csv_Country_Meta_Importer::import_from_csv_string( $body, pathinfo( $name, PATHINFO_FILENAME ) );
+			if ( ! empty( $imp['rows_written'] ) ) {
+				$proc_log[] = sprintf(
+					/* translators: 1: number of value cells written, 2: number of country posts, 3: comma-separated metric slugs */
+					__( 'Импорт в мета стран: записей %1$d, постов %2$d; показатели: %3$s.', 'flavor-worldstat' ),
+					(int) $imp['rows_written'],
+					(int) $imp['posts_touched'],
+					implode( ', ', $imp['metrics'] )
+				);
+			}
+		}
+
+		if ( ! empty( $proc_log ) ) {
+			self::set_process_log_flash( $proc_log );
+		}
+
+		$import_slugs_json = null;
+		if ( ! empty( $imp['metrics'] ) && is_array( $imp['metrics'] ) ) {
+			$slugs = array_values(
+				array_unique(
+					array_filter(
+						array_map( 'sanitize_key', $imp['metrics'] )
+					)
+				)
+			);
+			if ( ! empty( $slugs ) ) {
+				$import_slugs_json = wp_json_encode( $slugs );
+			}
 		}
 
 		$now = current_time( 'mysql', true );
 		$ins = $wpdb->insert(
 			$table,
 			array(
-				'file_name'    => $name,
-				'dataset_kind' => $dataset_kind,
-				'body'         => $body,
-				'created_gmt'  => $now,
-				'updated_gmt'  => $now,
-				'author_id'    => get_current_user_id(),
+				'file_name'           => $name,
+				'dataset_kind'        => $dataset_kind,
+				'import_metric_slugs' => $import_slugs_json,
+				'body'                => $body,
+				'created_gmt'         => $now,
+				'updated_gmt'         => $now,
+				'author_id'           => get_current_user_id(),
 			),
-			array( '%s', '%s', '%s', '%s', '%s', '%d' )
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%d' )
 		);
 
 		if ( ! $ins ) {
@@ -462,7 +501,21 @@ class WorldStat_Uploaded_Csv {
 
 		global $wpdb;
 		$table = self::table_name();
-		$del   = $wpdb->delete( $table, array( 'file_name' => $base ), array( '%s' ) );
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from prefix + constant.
+		$slug_row = $wpdb->get_row(
+			$wpdb->prepare( "SELECT import_metric_slugs FROM {$table} WHERE file_name = %s LIMIT 1", $base ),
+			ARRAY_A
+		);
+
+		if ( class_exists( 'WorldStat_Csv_Country_Meta_Importer' ) && is_array( $slug_row ) && ! empty( $slug_row['import_metric_slugs'] ) ) {
+			$slugs = json_decode( (string) $slug_row['import_metric_slugs'], true );
+			if ( is_array( $slugs ) && ! empty( $slugs ) ) {
+				WorldStat_Csv_Country_Meta_Importer::purge_imported_metrics_from_all_countries( $slugs );
+			}
+		}
+
+		$del = $wpdb->delete( $table, array( 'file_name' => $base ), array( '%s' ) );
 
 		if ( ! $del ) {
 			return new \WP_Error( 'wsp_csv_missing', __( 'Запись не найдена.', 'flavor-worldstat' ) );

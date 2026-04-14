@@ -188,7 +188,7 @@ class WorldStat_Data {
             return;
         }
 
-        $rows = $this->get_country_csv_rows( $iso3 );
+        $rows = $this->get_country_csv_rows( $iso3, $post_id );
         if ( empty( $rows ) ) {
             return;
         }
@@ -232,13 +232,19 @@ class WorldStat_Data {
     /**
      * Get values from all configured CSV files for country ISO3.
      */
-    private function get_country_csv_rows( string $iso3 ): array {
+    /**
+     * @param int $post_id ID поста страны (для мета wsp_metric_* после импорта CSV).
+     */
+    private function get_country_csv_rows( string $iso3, int $post_id = 0 ): array {
         if ( ! class_exists( 'WorldStat_Uploaded_Csv' ) ) {
-            return [];
+            return $post_id > 0 ? $this->get_country_meta_metric_rows( $post_id ) : [];
         }
 
-        $rev = (int) get_option( 'wsp_csv_files_revision', 0 );
-        $cache_key = 'wsp_csv_country_' . strtolower( $iso3 ) . '_r' . $rev;
+        $rev  = (int) get_option( 'wsp_csv_files_revision', 0 );
+        $mrev = class_exists( 'WorldStat_Csv_Country_Meta_Importer' )
+            ? (int) get_option( WorldStat_Csv_Country_Meta_Importer::OPTION_IMPORT_REVISION, 0 )
+            : 0;
+        $cache_key = 'wsp_csv_country_' . strtolower( $iso3 ) . '_r' . $rev . '_m' . $mrev;
         $cached    = get_transient( $cache_key );
         if ( is_array( $cached ) && $this->is_valid_country_csv_cache( $cached ) ) {
             return $cached;
@@ -279,8 +285,76 @@ class WorldStat_Data {
             ];
         }
 
+        if ( $post_id > 0 ) {
+            $rows = array_merge( $rows, $this->get_country_meta_metric_rows( $post_id ) );
+        }
+
         set_transient( $cache_key, $rows, HOUR_IN_SECONDS * 6 );
         return $rows;
+    }
+
+    /**
+     * Ряды из post meta (импорт CSV): ключ wsp_metric_{slug} → [ год => значение ].
+     *
+     * @return list<array{label:string,year:int,value:float,years:array<int,float>}>
+     */
+    private function get_country_meta_metric_rows( int $post_id ): array {
+        if ( $post_id < 1 || ! class_exists( 'WorldStat_Csv_Country_Meta_Importer' ) ) {
+            return [];
+        }
+
+        global $wpdb;
+        $prefix = WorldStat_Csv_Country_Meta_Importer::META_PREFIX;
+        $like   = $wpdb->esc_like( $prefix ) . '%';
+        $keys   = $wpdb->get_col(
+            $wpdb->prepare(
+                "SELECT meta_key FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key LIKE %s ORDER BY meta_key ASC",
+                $post_id,
+                $like
+            )
+        );
+
+        if ( empty( $keys ) ) {
+            return [];
+        }
+
+        $out = [];
+        foreach ( $keys as $meta_key ) {
+            $data = get_post_meta( $post_id, $meta_key, true );
+            if ( ! is_array( $data ) || empty( $data ) ) {
+                continue;
+            }
+
+            $series = [];
+            foreach ( $data as $y => $v ) {
+                $yi = (int) $y;
+                if ( $yi <= 0 || ! is_numeric( $v ) ) {
+                    continue;
+                }
+                $fv = (float) $v;
+                if ( ! is_finite( $fv ) ) {
+                    continue;
+                }
+                $series[ $yi ] = $fv;
+            }
+
+            if ( empty( $series ) ) {
+                continue;
+            }
+
+            krsort( $series, SORT_NUMERIC );
+            $latest_year = (int) array_key_first( $series );
+            $slug        = substr( (string) $meta_key, strlen( $prefix ) );
+
+            $out[] = [
+                'label' => WorldStat_Csv_Country_Meta_Importer::human_label_for_slug( $slug ),
+                'year'  => $latest_year,
+                'value' => (float) $series[ $latest_year ],
+                'years' => $series,
+            ];
+        }
+
+        return $out;
     }
 
     /**
