@@ -193,40 +193,68 @@ class WorldStat_Data {
             return;
         }
 
-        echo '<section class="wsp-country-csv-block">';
-        echo '<h3>' . esc_html__( 'Данные из CSV', 'flavor-worldstat' ) . '</h3>';
-        echo '<div class="wsp-table-wrap"><table class="wsp-data-table">';
-        echo '<thead><tr><th>' . esc_html__( 'Показатель', 'flavor-worldstat' ) . '</th><th>' . esc_html__( 'Год', 'flavor-worldstat' ) . '</th><th>' . esc_html__( 'Значение', 'flavor-worldstat' ) . '</th></tr></thead>';
-        echo '<tbody>';
-
-        foreach ( $rows as $i => $row ) {
-            $metric_id = 'wsp-csv-metric-' . $i;
-            echo '<tr>';
-            echo '<td>' . esc_html( $row['label'] ) . '</td>';
-            echo '<td>';
-            $years_with_data = array_filter(
-                $row['years'],
-                static fn( $v, $y ) => is_numeric( $v ) && (int) $y > 0,
-                ARRAY_FILTER_USE_BOTH
-            );
-
-            echo '<select class="wsp-csv-year-select" data-target="' . esc_attr( $metric_id ) . '">';
-            foreach ( $years_with_data as $year => $value ) {
-                $selected = ( (int) $year === (int) $row['year'] ) ? ' selected' : '';
-                echo '<option value="' . esc_attr( (string) $year ) . '"' . $selected . '>' . esc_html( (string) $year ) . '</option>';
+        $all_years = [];
+        foreach ( $rows as $row ) {
+            if ( ! empty( $row['years'] ) && is_array( $row['years'] ) ) {
+                $all_years = array_merge( $all_years, array_keys( $row['years'] ) );
             }
-            echo '</select>';
-            echo '</td>';
-            echo '<td class="wsp-csv-value-cell" id="' . esc_attr( $metric_id ) . '" data-values=\'' . esc_attr( wp_json_encode( $years_with_data ) ) . '\'>'
-                . esc_html( $this->format_csv_value( $row['value'] ) )
-                . '</td>';
-            echo '</tr>';
+        }
+        $all_years = array_values( array_unique( array_map( 'intval', $all_years ) ) );
+        rsort( $all_years, SORT_NUMERIC );
+        if ( empty( $all_years ) ) {
+            return;
         }
 
-        echo '</tbody></table></div>';
+        static $metric_icons = [
+            'population_total'        => [ 'label' => 'Население', 'icon' => 'groups' ],
+            'urban_land_area_sqkm'    => [ 'label' => 'Площадь урбанизированных территорий', 'icon' => 'building' ],
+            'largest_city_population' => [ 'label' => 'Население крупнейшего города', 'icon' => 'admin-home' ],
+            'forest_percentage'       => [ 'label' => 'Леса (% от территории)', 'icon' => 'tree' ],
+        ];
+
+        $grid_items = [];
+        foreach ( $rows as $index => $row ) {
+            $slug  = $this->normalize_metric_slug(
+                (string) ( $row['slug'] ?? '' ),
+                (string) ( $row['label'] ?? '' )
+            );
+            $label = trim( (string) ( $row['label'] ?? '' ) );
+            if ( $slug === '' || $slug === 'value' || $label === '' || ! isset( $row['value'] ) ) {
+                continue;
+            }
+
+            $nice = $metric_icons[ $slug ] ?? [
+                'label' => $this->humanize_label( $label ),
+                'icon'  => 'chart-bar',
+            ];
+            $grid_items[] = [
+                'label'      => $nice['label'],
+                'value'      => $this->format_csv_value( (float) $row['value'] ),
+                'icon'       => $nice['icon'],
+                'years_data' => is_array( $row['years'] ?? null ) ? $row['years'] : [],
+                'metric_id'  => 'csv-metric-' . $index,
+            ];
+        }
+        if ( empty( $grid_items ) ) {
+            return;
+        }
+
+        echo '<section class="wsp-country-csv-block">';
+        echo '<div class="wsp-csv-year-header">';
+        echo '<h3>' . esc_html__( 'Данные из загруженных CSV', 'flavor-worldstat' ) . '</h3>';
+        echo '<div class="wsp-csv-year-selector">';
+        echo '<label for="global-csv-year">' . esc_html__( 'Год:', 'flavor-worldstat' ) . '</label>';
+        echo '<select id="global-csv-year" class="wsp-select">';
+        foreach ( $all_years as $y ) {
+            echo '<option value="' . esc_attr( (string) $y ) . '">' . esc_html( (string) $y ) . '</option>';
+        }
+        echo '</select>';
+        echo '</div>';
+        echo '</div>';
+        WorldStat_UI::stats_grid( $grid_items, [ 'columns' => 4 ] );
         echo '</section>';
         $this->render_country_csv_styles();
-        $this->render_country_csv_script();
+        $this->render_global_year_script( $grid_items );
     }
 
     /**
@@ -250,7 +278,7 @@ class WorldStat_Data {
             return $cached;
         }
 
-        $rows = [];
+        $rows_by_slug = [];
 
         foreach ( WorldStat_Uploaded_Csv::list_files() as $file_row ) {
             $kind = (string) ( $file_row['dataset_kind'] ?? WorldStat_Uploaded_Csv::KIND_COUNTRY );
@@ -277,18 +305,23 @@ class WorldStat_Data {
             krsort( $series, SORT_NUMERIC );
             $latest_year = (int) array_key_first( $series );
 
-            $rows[] = [
-                'label' => $this->label_from_uploaded_csv_name( $file_row['name'] ?? '' ),
-                'year'  => $latest_year,
-                'value' => (float) $series[ $latest_year ],
-                'years' => $series,
-            ];
+            $label = $this->label_from_uploaded_csv_name( $file_row['name'] ?? '' );
+            $slug  = $this->normalize_metric_slug( (string) ( $file_row['name'] ?? '' ), $label );
+            $this->upsert_country_csv_row( $rows_by_slug, $slug, $label, $series );
         }
 
         if ( $post_id > 0 ) {
-            $rows = array_merge( $rows, $this->get_country_meta_metric_rows( $post_id ) );
+            foreach ( $this->get_country_meta_metric_rows( $post_id ) as $row ) {
+                $slug = $this->normalize_metric_slug(
+                    (string) ( $row['slug'] ?? '' ),
+                    (string) ( $row['label'] ?? '' )
+                );
+                $years = is_array( $row['years'] ?? null ) ? (array) $row['years'] : [];
+                $this->upsert_country_csv_row( $rows_by_slug, $slug, (string) ( $row['label'] ?? '' ), $years );
+            }
         }
 
+        $rows = array_values( $rows_by_slug );
         set_transient( $cache_key, $rows, HOUR_IN_SECONDS * 6 );
         return $rows;
     }
@@ -351,10 +384,68 @@ class WorldStat_Data {
                 'year'  => $latest_year,
                 'value' => (float) $series[ $latest_year ],
                 'years' => $series,
+                'slug'  => $slug,
             ];
         }
 
         return $out;
+    }
+
+    /**
+     * Нормализованный slug метрики для дедупликации между источниками.
+     */
+    private function normalize_metric_slug( string $raw_slug, string $label = '' ): string {
+        $base = $raw_slug !== '' ? $raw_slug : $label;
+        $base = strtolower( preg_replace( '/\.csv$/i', '', trim( $base ) ) );
+        $base = preg_replace( '/[^a-z0-9]+/i', '_', $base );
+        $base = trim( (string) $base, '_' );
+        return sanitize_key( $base );
+    }
+
+    /**
+     * Upsert строки метрики по slug + merge рядов по годам.
+     *
+     * @param array<string,array<string,mixed>> $rows_by_slug
+     * @param array<int,float|int|string>       $series
+     */
+    private function upsert_country_csv_row( array &$rows_by_slug, string $slug, string $label, array $series ): void {
+        if ( $slug === '' || $slug === 'value' ) {
+            return;
+        }
+
+        $clean_series = [];
+        foreach ( $series as $y => $v ) {
+            $yi = (int) $y;
+            if ( $yi <= 0 || ! is_numeric( $v ) ) {
+                continue;
+            }
+            $fv = (float) $v;
+            if ( ! is_finite( $fv ) ) {
+                continue;
+            }
+            $clean_series[ $yi ] = $fv;
+        }
+
+        if ( empty( $clean_series ) ) {
+            return;
+        }
+
+        if ( isset( $rows_by_slug[ $slug ] ) ) {
+            $existing_years = (array) ( $rows_by_slug[ $slug ]['years'] ?? [] );
+            $clean_series   = array_replace( $existing_years, $clean_series );
+        }
+
+        krsort( $clean_series, SORT_NUMERIC );
+        $latest_year = (int) array_key_first( $clean_series );
+        $base_label  = trim( $label ) !== '' ? $label : ( $rows_by_slug[ $slug ]['label'] ?? $slug );
+
+        $rows_by_slug[ $slug ] = [
+            'label' => (string) $base_label,
+            'slug'  => $slug,
+            'year'  => $latest_year,
+            'value' => (float) $clean_series[ $latest_year ],
+            'years' => $clean_series,
+        ];
     }
 
     /**
@@ -442,43 +533,71 @@ class WorldStat_Data {
     }
 
     /**
-     * Inline script for year selectors in CSV block.
+     * Красивое название для метрики, если нет в маппинге.
      */
-    private function render_country_csv_script(): void {
+    private function humanize_label( string $label ): string {
+        $label = str_replace( [ '_', '-' ], ' ', trim( $label ) );
+        return ucwords( strtolower( $label ) );
+    }
+
+    /**
+     * JS для общего выбора года на странице страны.
+     *
+     * @param array<int,array<string,mixed>> $grid_items
+     */
+    private function render_global_year_script( array $grid_items ): void {
         ?>
         <script>
             (function() {
-                if (window.wspCsvYearSelectorBound) {
+                if (window.wspCsvGlobalSelectorBound) {
                     return;
                 }
-                window.wspCsvYearSelectorBound = true;
-                document.addEventListener('change', function(e) {
-                    if (!e.target.classList.contains('wsp-csv-year-select')) {
+                window.wspCsvGlobalSelectorBound = true;
+                document.addEventListener('DOMContentLoaded', function () {
+                    var select = document.getElementById('global-csv-year');
+                    if (!select) {
                         return;
                     }
-                    var targetId = e.target.getAttribute('data-target');
-                    var valueCell = document.getElementById(targetId);
-                    if (!valueCell) {
-                        return;
+
+                    var dataMap = {};
+                    <?php foreach ( $grid_items as $item ) : ?>
+                        dataMap['<?php echo esc_js( (string) ( $item['metric_id'] ?? '' ) ); ?>'] = <?php echo wp_json_encode( $item['years_data'] ?? [] ); ?>;
+                    <?php endforeach; ?>
+
+                    function formatNumber(value) {
+                        var raw = Number(value);
+                        if (!Number.isFinite(raw)) {
+                            return '—';
+                        }
+                        return Number.isInteger(raw)
+                            ? raw.toLocaleString('ru-RU')
+                            : raw.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
-                    var map = {};
-                    try {
-                        map = JSON.parse(valueCell.getAttribute('data-values') || '{}');
-                    } catch (err) {
-                        map = {};
+
+                    function applyYear(year) {
+                        document.querySelectorAll('.wsp-country-csv-block .wsp-stat-card').forEach(function (card) {
+                            var metricId = card.getAttribute('data-metric-id');
+                            if (!metricId || !dataMap[metricId]) {
+                                return;
+                            }
+                            var value = dataMap[metricId][year];
+                            if (value === undefined) {
+                                return;
+                            }
+                            var valueEl = card.querySelector('.wsp-stat-value');
+                            if (valueEl) {
+                                valueEl.textContent = formatNumber(value);
+                            }
+                        });
                     }
-                    var selectedYear = e.target.value;
-                    if (map[selectedYear] === undefined) {
-                        return;
+
+                    select.addEventListener('change', function () {
+                        applyYear(String(select.value));
+                    });
+
+                    if (select.value !== '') {
+                        applyYear(String(select.value));
                     }
-                    var raw = Number(map[selectedYear]);
-                    if (!Number.isFinite(raw)) {
-                        return;
-                    }
-                    var formatted = Number.isInteger(raw)
-                        ? raw.toLocaleString('ru-RU')
-                        : raw.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    valueCell.textContent = formatted;
                 });
             })();
         </script>
@@ -491,27 +610,162 @@ class WorldStat_Data {
     private function render_country_csv_styles(): void {
         ?>
         <style>
-            .wsp-country-csv-block .wsp-csv-year-select {
-                min-width: 88px !important;
-                width: auto !important;
-                max-width: none !important;
-                display: inline-block !important;
-                padding: 4px 8px !important;
-                border: 1px solid #c6ccd2 !important;
-                border-radius: 6px !important;
-                background: #fff !important;
-                color: #1f2933 !important;
-                line-height: 1.2 !important;
-                font-size: 14px !important;
-                -webkit-appearance: menulist !important;
-                -moz-appearance: menulist !important;
-                appearance: menulist !important;
-                background-image: none !important;
+            .wsp-country-csv-block .wsp-csv-year-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
+                gap: 12px;
             }
-            .wsp-country-csv-block .wsp-csv-value-cell {
-                white-space: nowrap;
+            .wsp-country-csv-block .wsp-csv-year-selector {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 15px;
+            }
+            .wsp-country-csv-block .wsp-select {
+                padding: 8px 14px;
+                border: 1px solid #d1d5db;
+                border-radius: 8px;
+                background: #fff;
+                font-size: 15px;
+                color: #1f2937;
+                cursor: pointer;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                transition: all 0.2s ease;
+            }
+            .wsp-country-csv-block .wsp-select:focus {
+                outline: none;
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
             }
         </style>
+        <?php
+    }
+
+    /**
+     * JS для страницы сравнения: заполнение CSV-метрик в карточках + глобальный выбор года.
+     *
+     * @param array<int,string> $countries
+     */
+    public function render_compare_csv_js_for_cards( array $countries ): void {
+        $metrics  = [ 'forest_percentage', 'largest_city_population', 'urban_land_area_sqkm' ];
+        $all_data = [];
+        $all_years = [];
+
+        foreach ( $countries as $iso2_raw ) {
+            $iso2 = strtoupper( sanitize_text_field( (string) $iso2_raw ) );
+            if ( strlen( $iso2 ) !== 2 ) {
+                continue;
+            }
+            $post = WorldStat_Country_CPT::get_by_code( $iso2 );
+            if ( ! $post ) {
+                continue;
+            }
+            $iso3 = strtoupper( (string) get_post_meta( $post->ID, 'wsp_iso_alpha3', true ) );
+            if ( strlen( $iso3 ) !== 3 ) {
+                continue;
+            }
+
+            $rows = $this->get_country_csv_rows( $iso3, (int) $post->ID );
+            if ( empty( $rows ) ) {
+                continue;
+            }
+
+            $all_data[ $iso2 ] = [];
+            foreach ( $rows as $row ) {
+                $slug = $this->normalize_metric_slug(
+                    (string) ( $row['slug'] ?? '' ),
+                    (string) ( $row['label'] ?? '' )
+                );
+                if ( ! in_array( $slug, $metrics, true ) ) {
+                    continue;
+                }
+                $years = is_array( $row['years'] ?? null ) ? (array) $row['years'] : [];
+                $all_data[ $iso2 ][ $slug ] = $years;
+                $all_years = array_merge( $all_years, array_keys( $years ) );
+            }
+        }
+
+        $all_years = array_values( array_unique( array_map( 'intval', $all_years ) ) );
+        rsort( $all_years, SORT_NUMERIC );
+        ?>
+        <script>
+            (function() {
+                if (window.wspCompareCsvCardsBound) {
+                    return;
+                }
+                window.wspCompareCsvCardsBound = true;
+
+                document.addEventListener('DOMContentLoaded', function () {
+                    var select = document.getElementById('compare-global-year');
+                    if (!select) {
+                        return;
+                    }
+
+                    var csvData = <?php echo wp_json_encode( $all_data ); ?> || {};
+                    var years = <?php echo wp_json_encode( $all_years ); ?> || [];
+                    if (!years.length) {
+                        return;
+                    }
+
+                    select.innerHTML = '';
+                    years.forEach(function (year) {
+                        var option = document.createElement('option');
+                        option.value = String(year);
+                        option.textContent = String(year);
+                        select.appendChild(option);
+                    });
+
+                    function formatNumber(value, decimals) {
+                        var n = Number(value);
+                        if (!Number.isFinite(n)) {
+                            return '—';
+                        }
+                        return n.toLocaleString('ru-RU', {
+                            minimumFractionDigits: decimals,
+                            maximumFractionDigits: decimals
+                        });
+                    }
+
+                    function updateCards(year) {
+                        document.querySelectorAll('.wsp-comparison-card[data-iso2]').forEach(function (card) {
+                            var iso2 = (card.getAttribute('data-iso2') || '').toUpperCase();
+                            var data = csvData[iso2] || {};
+
+                            var forestEl = card.querySelector('.csv-forest');
+                            if (forestEl) {
+                                forestEl.textContent = data.forest_percentage && data.forest_percentage[year] !== undefined
+                                    ? formatNumber(data.forest_percentage[year], 2)
+                                    : '—';
+                            }
+
+                            var largestEl = card.querySelector('.csv-largest-city');
+                            if (largestEl) {
+                                largestEl.textContent = data.largest_city_population && data.largest_city_population[year] !== undefined
+                                    ? formatNumber(data.largest_city_population[year], 0)
+                                    : '—';
+                            }
+
+                            var urbanEl = card.querySelector('.csv-urban-area');
+                            if (urbanEl) {
+                                urbanEl.textContent = data.urban_land_area_sqkm && data.urban_land_area_sqkm[year] !== undefined
+                                    ? formatNumber(data.urban_land_area_sqkm[year], 2)
+                                    : '—';
+                            }
+                        });
+                    }
+
+                    select.addEventListener('change', function () {
+                        updateCards(String(select.value));
+                    });
+
+                    select.value = String(years[0]);
+                    updateCards(String(select.value));
+                });
+            })();
+        </script>
         <?php
     }
 }

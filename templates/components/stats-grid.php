@@ -10,7 +10,7 @@ $cols = $opts['columns'] ?? 4;
         $change_class = str_starts_with( $item['change'], '+' ) ? 'wsp-change-up' : ( str_starts_with( $item['change'], '-' ) ? 'wsp-change-down' : '' );
     }
 ?>
-    <div class="wsp-stat-card">
+    <div class="wsp-stat-card" data-metric-id="<?php echo esc_attr( $item['metric_id'] ?? '' ); ?>">
         <?php if ( ! empty( $item['icon'] ) ) : ?>
             <span class="wsp-stat-icon dashicons dashicons-<?php echo esc_attr( $item['icon'] ); ?>"></span>
         <?php endif; ?>

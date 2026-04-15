@@ -133,6 +133,7 @@ class WorldStat_Csv_Country_Meta_Importer {
 		}
 
 		$touched = array();
+		$pending = array();
 
 		for ( $li = 1, $n = count( $lines ); $li < $n; $li++ ) {
 			$line = trim( (string) $lines[ $li ] );
@@ -177,12 +178,14 @@ class WorldStat_Csv_Country_Meta_Importer {
 				}
 
 				$meta_key = self::META_PREFIX . sanitize_key( $slug );
-				self::merge_year_value( $post_id, $meta_key, $year, $val );
+				self::queue_year_value( $pending, $post_id, $meta_key, $year, $val );
 				$touched[ $post_id ] = true;
 				++$out['rows_written'];
 				$out['metrics'][] = sanitize_key( $slug );
 			}
 		}
+
+		self::flush_queued_year_values( $pending );
 
 		$out['posts_touched'] = count( $touched );
 		$out['metrics']       = array_values( array_unique( array_filter( $out['metrics'] ) ) );
@@ -231,6 +234,7 @@ class WorldStat_Csv_Country_Meta_Importer {
 		$metric_slug = $hint_slug !== '' ? $hint_slug : 'value';
 		$meta_key    = self::META_PREFIX . sanitize_key( $metric_slug );
 		$touched     = array();
+		$pending     = array();
 
 		for ( $li = 1, $n = count( $lines ); $li < $n; $li++ ) {
 			$line = trim( (string) $lines[ $li ] );
@@ -256,7 +260,7 @@ class WorldStat_Csv_Country_Meta_Importer {
 				if ( $val === null ) {
 					continue;
 				}
-				self::merge_year_value( $post_id, $meta_key, $year, $val );
+				self::queue_year_value( $pending, $post_id, $meta_key, $year, $val );
 				$touched[ $post_id ] = true;
 				++$out['rows_written'];
 			}
@@ -268,6 +272,7 @@ class WorldStat_Csv_Country_Meta_Importer {
 
 		$out['posts_touched'] = count( $touched );
 		$out['metrics']       = array( sanitize_key( $metric_slug ) );
+		self::flush_queued_year_values( $pending );
 		self::register_metric_slug( sanitize_key( $metric_slug ) );
 		self::bump_import_revision();
 
@@ -450,6 +455,62 @@ class WorldStat_Csv_Country_Meta_Importer {
 		ksort( $clean, SORT_NUMERIC );
 
 		update_post_meta( $post_id, $meta_key, $clean );
+	}
+
+	/**
+	 * Накопление импортируемых значений (чтобы писать в БД пакетно, а не по каждой ячейке).
+	 *
+	 * @param array<int,array<string,array<int,float>>> $pending
+	 */
+	private static function queue_year_value( array &$pending, int $post_id, string $meta_key, int $year, float $value ): void {
+		if ( $post_id < 1 || $meta_key === '' || $year <= 0 ) {
+			return;
+		}
+		if ( ! isset( $pending[ $post_id ] ) ) {
+			$pending[ $post_id ] = array();
+		}
+		if ( ! isset( $pending[ $post_id ][ $meta_key ] ) ) {
+			$pending[ $post_id ][ $meta_key ] = array();
+		}
+		$pending[ $post_id ][ $meta_key ][ $year ] = $value;
+	}
+
+	/**
+	 * Сброс накопленных значений в post meta.
+	 *
+	 * @param array<int,array<string,array<int,float>>> $pending
+	 */
+	private static function flush_queued_year_values( array $pending ): void {
+		foreach ( $pending as $post_id => $meta_map ) {
+			$pid = (int) $post_id;
+			if ( $pid < 1 || ! is_array( $meta_map ) ) {
+				continue;
+			}
+			foreach ( $meta_map as $meta_key => $series ) {
+				if ( ! is_array( $series ) || empty( $series ) ) {
+					continue;
+				}
+				$existing = get_post_meta( $pid, (string) $meta_key, true );
+				if ( ! is_array( $existing ) ) {
+					$existing = array();
+				}
+				$clean = array();
+				foreach ( $existing as $y => $v ) {
+					$yi = (int) $y;
+					if ( $yi > 0 && is_numeric( $v ) ) {
+						$clean[ $yi ] = (float) $v;
+					}
+				}
+				foreach ( $series as $year => $value ) {
+					$yi = (int) $year;
+					if ( $yi > 0 ) {
+						$clean[ $yi ] = (float) $value;
+					}
+				}
+				ksort( $clean, SORT_NUMERIC );
+				update_post_meta( $pid, (string) $meta_key, $clean );
+			}
+		}
 	}
 
 	private static function register_metric_slug( string $slug ): void {
