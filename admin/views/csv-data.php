@@ -14,6 +14,9 @@ $wsp_csv_ready = WorldStat_Uploaded_Csv::is_storage_ready();
 $wsp_csv_table = WorldStat_Uploaded_Csv::table_name();
 $wsp_csv_page   = admin_url( 'admin.php?page=worldstat-csv' );
 $wsp_kind_labels = WorldStat_Uploaded_Csv::dataset_kind_labels();
+$wsp_csv_selected_kind = isset( $_GET['wsp_csv_kind'] )
+	? WorldStat_Uploaded_Csv::sanitize_dataset_kind( sanitize_key( wp_unslash( $_GET['wsp_csv_kind'] ) ) )
+	: WorldStat_Uploaded_Csv::get_last_dataset_kind_for_user( get_current_user_id() );
 ?>
 <div class="wrap wsp-admin-wrap">
 	<h1 class="wsp-admin-title">
@@ -90,18 +93,25 @@ $wsp_kind_labels = WorldStat_Uploaded_Csv::dataset_kind_labels();
 					</legend>
 					<p style="margin:0 0 10px;">
 						<label style="display:block;margin-bottom:8px;">
-							<input type="radio" name="wsp_csv_dataset_kind" value="<?php echo esc_attr( WorldStat_Uploaded_Csv::KIND_COUNTRY ); ?>" checked />
+							<input type="radio" name="wsp_csv_dataset_kind" value="<?php echo esc_attr( WorldStat_Uploaded_Csv::KIND_COUNTRY ); ?>" <?php checked( $wsp_csv_selected_kind, WorldStat_Uploaded_Csv::KIND_COUNTRY ); ?> />
 							<?php echo esc_html( $wsp_kind_labels[ WorldStat_Uploaded_Csv::KIND_COUNTRY ] ?? '' ); ?>
 						</label>
 						<span class="description" style="display:block;margin:-4px 0 10px 24px;">
 							<?php esc_html_e( 'Справочные ряды по странам: население, площадь, столица и аналогичные показатели. Используются на страницах стран. Очистка без агрессивного IQR по колонке значений.', 'flavor-worldstat' ); ?>
 						</span>
 						<label style="display:block;margin-bottom:4px;">
-							<input type="radio" name="wsp_csv_dataset_kind" value="<?php echo esc_attr( WorldStat_Uploaded_Csv::KIND_INDICATOR ); ?>" />
+							<input type="radio" name="wsp_csv_dataset_kind" value="<?php echo esc_attr( WorldStat_Uploaded_Csv::KIND_INDICATOR ); ?>" <?php checked( $wsp_csv_selected_kind, WorldStat_Uploaded_Csv::KIND_INDICATOR ); ?> />
 							<?php echo esc_html( $wsp_kind_labels[ WorldStat_Uploaded_Csv::KIND_INDICATOR ] ?? '' ); ?>
 						</label>
+						<span class="description" style="display:block;margin:0 0 10px 24px;">
+							<?php esc_html_e( 'Только для расчётов (индекс эргономичности страны и др.): не импортируются в мета стран и не попадают в блок «Данные из загруженных CSV» в обзоре. Очистка такая же мягкая (platform), как у показателей страны, чтобы формат «код–год–значение» не ломался.', 'flavor-worldstat' ); ?>
+						</span>
+						<label style="display:block;margin-bottom:4px;">
+							<input type="radio" name="wsp_csv_dataset_kind" value="<?php echo esc_attr( WorldStat_Uploaded_Csv::KIND_COMBINED ); ?>" <?php checked( $wsp_csv_selected_kind, WorldStat_Uploaded_Csv::KIND_COMBINED ); ?> />
+							<?php echo esc_html( $wsp_kind_labels[ WorldStat_Uploaded_Csv::KIND_COMBINED ] ?? '' ); ?>
+						</label>
 						<span class="description" style="display:block;margin:0 0 0 24px;">
-							<?php esc_html_e( 'Индикаторы для аналитики и составных индексов: дороги, урбанизация, леса и т.д. На страницах стран не показываются. Включён режим analytics (в т.ч. IQR по числовым колонкам).', 'flavor-worldstat' ); ?>
+							<?php esc_html_e( 'Как «Показатели страны» (карточки, мета, мягкая очистка), плюс файл участвует в макрорасчётах так же, как индикаторы.', 'flavor-worldstat' ); ?>
 						</span>
 					</p>
 				</fieldset>

@@ -319,3 +319,39 @@
     border-top: 1px solid #e2e8f0;
     margin: 6px 0;
 }
+
+/* ─── Country overview chips (region / income / coords) ─ */
+.wsp-country-overview-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 0 0 20px;
+}
+.wsp-country-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    font-size: 14px;
+    color: var(--wsp-gray-800, #1f2937);
+    background: var(--wsp-gray-50, #f9fafb);
+    border: 1px solid var(--wsp-gray-200, #e5e7eb);
+    border-radius: 999px;
+    line-height: 1.3;
+}
+.wsp-country-chip .dashicons {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    color: var(--wsp-primary, #2563eb);
+}
+.wsp-country-chip a {
+    color: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.wsp-country-chip a:hover {
+    text-decoration: underline;
+}

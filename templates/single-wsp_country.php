@@ -79,11 +79,8 @@ do_action( 'worldstat_after_country', $post_id, $iso2, $meta );
 // ────────────────────────────────────────────────────────────────
 if ( is_singular( 'wsp_country' ) ) {
     $plugin_root = content_url( 'plugins/world-statistics-platform' );
-
     ?>
     <link rel="stylesheet" href="<?php echo esc_url( $plugin_root . '/assets/css/ergonomics.min.css' ); ?>">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
-    <script src="<?php echo esc_url( $plugin_root . '/assets/js/ergonomics.min.js' ); ?>" defer></script>
     <?php
 }
 

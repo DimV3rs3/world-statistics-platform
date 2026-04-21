@@ -22,10 +22,16 @@ class WorldStat_Uploaded_Csv {
 	public const KIND_INDICATOR = 'indicator';
 
 	/**
+	 * Только для расчётов (эргономика стран и т.п.): не импорт в мета стран, не блок «Данные из CSV» в обзоре.
+	 * См. {@see self::KIND_COMBINED} если нужны и карточки на сайте, и расчёты.
+	 */
+	public const KIND_COMBINED = 'country_ergo_combined';
+
+	/**
 	 * @return list<string>
 	 */
 	public static function dataset_kinds(): array {
-		return array( self::KIND_COUNTRY, self::KIND_INDICATOR );
+		return array( self::KIND_COUNTRY, self::KIND_INDICATOR, self::KIND_COMBINED );
 	}
 
 	/**
@@ -33,14 +39,49 @@ class WorldStat_Uploaded_Csv {
 	 */
 	public static function dataset_kind_labels(): array {
 		return array(
-			self::KIND_COUNTRY  => __( 'Показатели страны', 'flavor-worldstat' ),
+			self::KIND_COUNTRY   => __( 'Показатели страны', 'flavor-worldstat' ),
 			self::KIND_INDICATOR => __( 'Индикаторы для расчётов', 'flavor-worldstat' ),
+			self::KIND_COMBINED  => __( 'Показатели страны + расчёты (объединённо)', 'flavor-worldstat' ),
 		);
+	}
+
+	/**
+	 * Типы CSV, которые участвуют в блоке «Данные из загруженных CSV» и импорте в мета стран (wsp_metric_*).
+	 */
+	public static function is_country_display_kind( string $kind ): bool {
+		$kind = sanitize_key( $kind );
+		return self::KIND_COUNTRY === $kind || self::KIND_COMBINED === $kind;
+	}
+
+	/**
+	 * Типы, из которых читаются ряды для макрорасчётов (эргономика и др.).
+	 */
+	public static function is_calculation_source_kind( string $kind ): bool {
+		$kind = sanitize_key( $kind );
+		return in_array( $kind, array( self::KIND_COUNTRY, self::KIND_INDICATOR, self::KIND_COMBINED ), true );
 	}
 
 	public static function sanitize_dataset_kind( string $kind ): string {
 		$kind = sanitize_key( $kind );
 		return in_array( $kind, self::dataset_kinds(), true ) ? $kind : self::KIND_COUNTRY;
+	}
+
+	/** user_meta: последний выбранный тип при загрузке CSV (чтобы форма не сбрасывалась). */
+	public const USER_META_LAST_DATASET_KIND = 'wsp_csv_last_dataset_kind';
+
+	public static function remember_last_dataset_kind_for_user( int $user_id, string $kind ): void {
+		if ( $user_id < 1 ) {
+			return;
+		}
+		update_user_meta( $user_id, self::USER_META_LAST_DATASET_KIND, self::sanitize_dataset_kind( $kind ) );
+	}
+
+	public static function get_last_dataset_kind_for_user( int $user_id ): string {
+		if ( $user_id < 1 ) {
+			return self::KIND_COUNTRY;
+		}
+		$raw = get_user_meta( $user_id, self::USER_META_LAST_DATASET_KIND, true );
+		return is_string( $raw ) && $raw !== '' ? self::sanitize_dataset_kind( $raw ) : self::KIND_COUNTRY;
 	}
 
 	/**
@@ -364,14 +405,11 @@ class WorldStat_Uploaded_Csv {
 		}
 
 		$cleaner = new WorldStat_Csv_Cleaner();
+		// Все типы датасетов: режим platform. Режим analytics (IQR + шаг 8) ломал типичный формат
+		// country_code / year / value и мешал макроиндексу эргономичности страны, который читает те же CSV из БД.
 		$base_opts = array(
 			'purpose' => 'platform',
 		);
-		if ( $dataset_kind === self::KIND_INDICATOR ) {
-			$base_opts = array(
-				'purpose' => 'analytics',
-			);
-		}
 		$opts = apply_filters(
 			'worldstat_csv_cleaner_options',
 			$base_opts,
@@ -421,7 +459,8 @@ class WorldStat_Uploaded_Csv {
 			'unknown_country' => 0,
 			'metrics'         => array(),
 		);
-		if ( class_exists( 'WorldStat_Csv_Country_Meta_Importer' ) ) {
+		$import_to_country_meta = self::is_country_display_kind( $dataset_kind );
+		if ( $import_to_country_meta && class_exists( 'WorldStat_Csv_Country_Meta_Importer' ) ) {
 			$imp = WorldStat_Csv_Country_Meta_Importer::import_from_csv_string( $body, pathinfo( $name, PATHINFO_FILENAME ) );
 			if ( ! empty( $imp['rows_written'] ) ) {
 				$proc_log[] = sprintf(
@@ -432,6 +471,8 @@ class WorldStat_Uploaded_Csv {
 					implode( ', ', $imp['metrics'] )
 				);
 			}
+		} elseif ( ! $import_to_country_meta && class_exists( 'WorldStat_Csv_Country_Meta_Importer' ) ) {
+			$proc_log[] = __( 'Тип «Индикаторы для расчётов»: данные сохранены в таблице CSV для расчётов; импорт в мета стран и карточки обзора не выполнялся.', 'flavor-worldstat' );
 		}
 
 		if ( ! empty( $proc_log ) ) {

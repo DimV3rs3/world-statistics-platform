@@ -205,12 +205,21 @@ class WorldStat_Data {
             return;
         }
 
-        static $metric_icons = [
-            'population_total'        => [ 'label' => 'Население', 'icon' => 'groups' ],
-            'urban_land_area_sqkm'    => [ 'label' => 'Площадь урбанизированных территорий', 'icon' => 'building' ],
-            'largest_city_population' => [ 'label' => 'Население крупнейшего города', 'icon' => 'admin-home' ],
-            'forest_percentage'       => [ 'label' => 'Леса (% от территории)', 'icon' => 'tree' ],
-        ];
+        // PHP 8.3+: static-переменную нельзя инициализировать вызовами вроде __() — только «константные» выражения.
+        static $metric_icons = null;
+        if ( null === $metric_icons ) {
+            $metric_icons = [
+                'population_total'           => [ 'label' => __( 'Население', 'flavor-worldstat' ), 'icon' => 'groups' ],
+                'population_density_per_km2' => [ 'label' => __( 'Плотность населения на км²', 'flavor-worldstat' ), 'icon' => 'chart-bar' ],
+                'surface_area_sqkm'          => [ 'label' => __( 'Площадь территории, км²', 'flavor-worldstat' ), 'icon' => 'editor-expand' ],
+                'urban_share_percent'        => [ 'label' => __( 'Доля городского населения, %', 'flavor-worldstat' ), 'icon' => 'admin-multisite' ],
+                'urban_land_area_sqkm'       => [ 'label' => __( 'Площадь урбанизированных территорий, км²', 'flavor-worldstat' ), 'icon' => 'building' ],
+                'largest_city_population'    => [ 'label' => __( 'Население крупнейшего города', 'flavor-worldstat' ), 'icon' => 'admin-home' ],
+                'forest_percentage'          => [ 'label' => __( 'Леса (% от территории)', 'flavor-worldstat' ), 'icon' => 'chart-area' ],
+                'railway_length'             => [ 'label' => __( 'Железные дороги, км', 'flavor-worldstat' ), 'icon' => 'migrate' ],
+                'road_length'                => [ 'label' => __( 'Дороги, км', 'flavor-worldstat' ), 'icon' => 'car' ],
+            ];
+        }
 
         $grid_items = [];
         foreach ( $rows as $index => $row ) {
@@ -252,9 +261,120 @@ class WorldStat_Data {
         echo '</div>';
         echo '</div>';
         WorldStat_UI::stats_grid( $grid_items, [ 'columns' => 4 ] );
+        $this->render_country_csv_charts( $grid_items );
         echo '</section>';
         $this->render_country_csv_styles();
         $this->render_global_year_script( $grid_items );
+    }
+
+    /**
+     * Линейные графики по годам для метрик с ≥2 точками (Chart.js / WSPChart).
+     *
+     * @param array<int,array<string,mixed>> $grid_items
+     */
+    private function render_country_csv_charts( array $grid_items ): void {
+        $specs   = [];
+        $chart_i = 0;
+        foreach ( $grid_items as $item ) {
+            $years = isset( $item['years_data'] ) && is_array( $item['years_data'] ) ? $item['years_data'] : [];
+            if ( count( $years ) < 2 ) {
+                continue;
+            }
+            if ( count( $specs ) >= 12 ) {
+                break;
+            }
+            ksort( $years, SORT_NUMERIC );
+            $labels = array_map( 'strval', array_keys( $years ) );
+            $data    = array_values( $years );
+            $data    = array_map(
+                static function ( $v ) {
+                    if ( ! is_numeric( $v ) ) {
+                        return null;
+                    }
+                    $f = (float) $v;
+                    return is_finite( $f ) ? $f : null;
+                },
+                $data
+            );
+            ++$chart_i;
+            $cid = 'wsp-csv-chart-' . $chart_i;
+            $specs[] = [
+                'canvasId' => $cid,
+                'title'    => (string) ( $item['label'] ?? '' ),
+                'labels'   => $labels,
+                'data'     => $data,
+            ];
+        }
+        if ( empty( $specs ) ) {
+            return;
+        }
+
+        WorldStat_UI::enqueue_chart_scripts();
+
+        $json = wp_json_encode( $specs, JSON_UNESCAPED_UNICODE );
+        if ( false === $json ) {
+            return;
+        }
+
+        $total_metrics = count( $grid_items );
+        $shown         = count( $specs );
+        ?>
+        <div class="wsp-csv-charts-wrap">
+            <h4 class="wsp-csv-charts-title"><?php esc_html_e( 'Динамика по годам', 'flavor-worldstat' ); ?></h4>
+            <?php if ( $total_metrics > $shown ) : ?>
+                <p class="wsp-csv-charts-note"><?php echo esc_html( sprintf( __( 'Показаны графики для %1$d из %2$d показателей (есть минимум две точки по годам).', 'flavor-worldstat' ), $shown, $total_metrics ) ); ?></p>
+            <?php endif; ?>
+            <div class="wsp-csv-charts-grid">
+                <?php foreach ( $specs as $spec ) : ?>
+                    <div class="wsp-csv-chart-card">
+                        <h5 class="wsp-csv-chart-card__title"><?php echo esc_html( $spec['title'] ); ?></h5>
+                        <div class="wsp-csv-chart-card__canvas" style="position:relative;height:220px;">
+                            <canvas id="<?php echo esc_attr( $spec['canvasId'] ); ?>"></canvas>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <script>
+        (function(){
+            var specs = <?php echo $json; ?>;
+            function paint(){
+                if (typeof Chart === 'undefined' || !window.WSPChart || !specs || !specs.length) {
+                    return false;
+                }
+                specs.forEach(function(s){
+                    if (!s.canvasId || !s.labels || !s.data) return;
+                    var color = '#2563eb';
+                    window.WSPChart.render(s.canvasId, {
+                        type: 'line',
+                        title: '',
+                        labels: s.labels,
+                        datasets: [ { label: s.title, data: s.data, color: color } ],
+                        xLabel: <?php echo wp_json_encode( __( 'Год', 'flavor-worldstat' ) ); ?>,
+                        yLabel: '',
+                        legend: false
+                    });
+                });
+                return true;
+            }
+            var tryPaintAttempts = 0;
+            var tryPaintMax = 80;
+            function tryPaint(){
+                if (paint()) return;
+                tryPaintAttempts++;
+                if (tryPaintAttempts >= tryPaintMax) {
+                    return;
+                }
+                setTimeout(tryPaint, 120);
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', tryPaint);
+            } else {
+                tryPaint();
+            }
+        })();
+        </script>
+        <?php
     }
 
     /**
@@ -282,7 +402,7 @@ class WorldStat_Data {
 
         foreach ( WorldStat_Uploaded_Csv::list_files() as $file_row ) {
             $kind = (string) ( $file_row['dataset_kind'] ?? WorldStat_Uploaded_Csv::KIND_COUNTRY );
-            if ( $kind !== WorldStat_Uploaded_Csv::KIND_COUNTRY ) {
+            if ( ! WorldStat_Uploaded_Csv::is_country_display_kind( $kind ) ) {
                 continue;
             }
 
@@ -561,7 +681,27 @@ class WorldStat_Data {
 
                     var dataMap = {};
                     <?php foreach ( $grid_items as $item ) : ?>
-                        dataMap['<?php echo esc_js( (string) ( $item['metric_id'] ?? '' ) ); ?>'] = <?php echo wp_json_encode( $item['years_data'] ?? [] ); ?>;
+                        <?php
+                        $mid = (string) ( $item['metric_id'] ?? '' );
+                        $yd  = isset( $item['years_data'] ) && is_array( $item['years_data'] ) ? $item['years_data'] : [];
+                        $yd_clean = [];
+                        foreach ( $yd as $yk => $yv ) {
+                            $yi = (int) $yk;
+                            if ( $yi <= 0 || ! is_numeric( $yv ) ) {
+                                continue;
+                            }
+                            $fv = (float) $yv;
+                            if ( ! is_finite( $fv ) ) {
+                                continue;
+                            }
+                            $yd_clean[ (string) $yi ] = $fv;
+                        }
+                        $yd_json = wp_json_encode( $yd_clean, JSON_UNESCAPED_UNICODE );
+                        if ( false === $yd_json ) {
+                            $yd_json = '{}';
+                        }
+                        ?>
+                        dataMap['<?php echo esc_js( $mid ); ?>'] = <?php echo $yd_json; ?>;
                     <?php endforeach; ?>
 
                     function formatNumber(value) {
@@ -639,6 +779,43 @@ class WorldStat_Data {
                 outline: none;
                 border-color: #3b82f6;
                 box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+            }
+            .wsp-csv-charts-wrap {
+                margin-top: 28px;
+                padding-top: 20px;
+                border-top: 1px solid #e5e7eb;
+            }
+            .wsp-csv-charts-title {
+                margin: 0 0 8px;
+                font-size: 1.15rem;
+                color: #111827;
+            }
+            .wsp-csv-charts-note {
+                margin: 0 0 16px;
+                font-size: 0.9rem;
+                color: #6b7280;
+            }
+            .wsp-csv-charts-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 18px;
+            }
+            .wsp-csv-chart-card {
+                background: #fff;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 14px 14px 8px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            }
+            .wsp-csv-chart-card__title {
+                margin: 0 0 8px;
+                font-size: 0.95rem;
+                font-weight: 600;
+                color: #374151;
+                line-height: 1.3;
+            }
+            .wsp-csv-chart-card__canvas {
+                width: 100%;
             }
         </style>
         <?php

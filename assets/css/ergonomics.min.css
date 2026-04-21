@@ -165,3 +165,92 @@
         height: 280px
     }
 }
+
+/* Макро-вкладка: строки «показатель — значение» внутри .ergo-macro-panel (подключается ergonomics.min.css на single wsp_country) */
+.ergo-macro-panel .wsergo-macro-panel-lead {
+    margin: 0 0 .75rem;
+    font-size: .92rem;
+    color: #64748b;
+    line-height: 1.45
+}
+.ergo-macro-panel .wsergo-macro-kv {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .45rem
+}
+.ergo-macro-panel .wsergo-macro-kv li {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .75rem 1rem;
+    padding: .55rem .85rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04)
+}
+.ergo-macro-panel .wsergo-macro-kv__label {
+    flex: 1;
+    min-width: 0;
+    font-size: .86rem;
+    color: #475569;
+    line-height: 1.35
+}
+.ergo-macro-panel .wsergo-macro-kv__val {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #1d4ed8;
+    font-size: .92rem;
+    text-align: right;
+    white-space: nowrap
+}
+@media (max-width:520px) {
+    .ergo-macro-panel .wsergo-macro-kv li {
+        flex-direction: column;
+        align-items: stretch
+    }
+    .ergo-macro-panel .wsergo-macro-kv__val {
+        text-align: left
+    }
+}
+
+/* Переключатель «по осям» / «по темам» в макроблоке страны */
+.wsergo-macro-detail-views {
+    margin-top: .25rem
+}
+.wsergo-macro-view-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin: 0 0 1rem;
+    padding: .35rem;
+    background: #f1f5f9;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0
+}
+.wsergo-macro-view-tab {
+    flex: 1 1 auto;
+    min-width: 140px;
+    padding: .55rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    font-size: .9rem;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s
+}
+.wsergo-macro-view-tab:hover {
+    background: #e2e8f0;
+    color: #1e293b
+}
+.wsergo-macro-view-tab.active {
+    background: #fff;
+    color: #1d4ed8;
+    border-color: #cbd5e1;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .06)
+}

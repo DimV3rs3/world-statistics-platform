@@ -44,6 +44,13 @@ class WorldStat_UI {
      *   @type int    $height  Canvas height in px.
      * }
      */
+    /**
+     * Подключить Chart.js и chart-builder (например, для инлайн-графиков вне WorldStat_UI::chart()).
+     */
+    public static function enqueue_chart_scripts(): void {
+        self::enqueue_chartjs();
+    }
+
     public static function chart( array $opts = [] ): string {
         $opts = wp_parse_args( $opts, [
             'type' => 'line', 'title' => '', 'labels' => [], 'datasets' => [],

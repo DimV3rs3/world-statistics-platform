@@ -106,10 +106,19 @@ class WorldStat_Admin {
         if ( $action === 'upload' && ! empty( $_FILES['wsp_csv_file'] ) ) {
             $kind_raw = isset( $_POST['wsp_csv_dataset_kind'] ) ? sanitize_key( wp_unslash( $_POST['wsp_csv_dataset_kind'] ) ) : WorldStat_Uploaded_Csv::KIND_COUNTRY;
             $kind     = WorldStat_Uploaded_Csv::sanitize_dataset_kind( $kind_raw );
+            WorldStat_Uploaded_Csv::remember_last_dataset_kind_for_user( get_current_user_id(), $kind );
             $result   = WorldStat_Uploaded_Csv::save_upload( $_FILES['wsp_csv_file'], $kind );
             if ( is_wp_error( $result ) ) {
                 WorldStat_Uploaded_Csv::set_admin_error_flash( $result->get_error_message() );
-                wp_safe_redirect( add_query_arg( 'wsp_csv_msg', 'error', $redirect ) );
+                wp_safe_redirect(
+                    add_query_arg(
+                        [
+                            'wsp_csv_msg'  => 'error',
+                            'wsp_csv_kind' => $kind,
+                        ],
+                        $redirect
+                    )
+                );
                 exit;
             }
             wp_safe_redirect(
@@ -117,6 +126,7 @@ class WorldStat_Admin {
                     [
                         'wsp_csv_msg'  => 'upload_ok',
                         'wsp_csv_file' => $result,
+                        'wsp_csv_kind' => $kind,
                     ],
                     $redirect
                 )
