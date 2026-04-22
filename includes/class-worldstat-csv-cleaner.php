@@ -514,8 +514,60 @@ class WorldStat_Csv_Cleaner {
 	}
 
 	/**
-	 * Удаляет строки данных, где в третьей колонке нет конечного числа (типичный формат: код, год, значение).
-	 * Иначе в БД и файле остаются «ABW,1960,» с пустым показателем.
+	 * Заголовок похож на wide panel: страна/код + год + несколько числовых метрик.
+	 */
+	private function csv_header_looks_like_wide_country_year( array $header ): bool {
+		$n = count( $header );
+		if ( $n < 4 ) {
+			return false;
+		}
+		$h0 = $this->csv_header_token_for_detection( (string) ( $header[0] ?? '' ) );
+		$h1 = $this->csv_header_token_for_detection( (string) ( $header[1] ?? '' ) );
+		$geo = (bool) preg_match( '/country|location|nation|iso|geo|territory|area_code/', $h0 );
+		$yr  = (bool) preg_match( '/(^|_)year($|_)|^yr$|^time$|reference_period|reference_year/', $h1 );
+		return $geo && $yr;
+	}
+
+	private function csv_header_token_for_detection( string $s ): string {
+		$s = strtolower( trim( preg_replace( '/\x{00a0}/u', ' ', $s ) ) );
+		$s = str_replace( array( "\t", ' ', '-' ), '_', $s );
+		$s = (string) preg_replace( '/_+/', '_', $s );
+		return $s;
+	}
+
+	/**
+	 * Есть ли в строке хотя бы одно конечное число в колонках с индексом >= $from (для wide panel после country+year).
+	 *
+	 * @param list<string|int|float|null> $row
+	 */
+	private function csv_row_has_finite_numeric_from_col( array $row, int $from, int $width ): bool {
+		for ( $c = $from; $c < $width; $c++ ) {
+			$v = $row[ $c ] ?? null;
+			if ( $v === null || $v === '' ) {
+				continue;
+			}
+			if ( is_int( $v ) || is_float( $v ) ) {
+				if ( is_float( $v ) && ! is_finite( $v ) ) {
+					continue;
+				}
+				return true;
+			}
+			if ( is_string( $v ) ) {
+				$t = trim( $v );
+				if ( $t === '' || ! is_numeric( $t ) ) {
+					continue;
+				}
+				$fv = (float) $t + 0.0;
+				if ( is_finite( $fv ) ) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Удаляет строки без числового показателя: для узкого формата — число в 3-й колонке; для wide panel — хотя бы одно число среди метрик после года.
 	 *
 	 * @param list<list<string|int|float|null>> $data
 	 * @return list<list<string|int|float|null>>
@@ -533,11 +585,19 @@ class WorldStat_Csv_Cleaner {
 			return $data;
 		}
 
+		$wide = $this->csv_header_looks_like_wide_country_year( $header );
+
 		$before = count( $data );
 		$kept   = array();
 
 		foreach ( $data as $row ) {
 			if ( ! is_array( $row ) || count( $row ) < 3 ) {
+				continue;
+			}
+			if ( $wide ) {
+				if ( $this->csv_row_has_finite_numeric_from_col( $row, 2, $width ) ) {
+					$kept[] = $row;
+				}
 				continue;
 			}
 			$v = $row[2] ?? null;
@@ -570,7 +630,9 @@ class WorldStat_Csv_Cleaner {
 		$removed        = max( 0, $before - $data_rows_left );
 		$this->log_step(
 			sprintf(
-				'Целостность: удалено строк без числового значения в 3-й колонке: %d (осталось строк данных: %d)',
+				$wide
+					? 'Целостность (wide): удалено строк без числовой метрики после country/year: %d (осталось строк данных: %d)'
+					: 'Целостность: удалено строк без числового значения в 3-й колонке: %d (осталось строк данных: %d)',
 				$removed,
 				$data_rows_left
 			)
@@ -582,7 +644,7 @@ class WorldStat_Csv_Cleaner {
 	/**
 	 * @param list<list<string|int|float|null>> $data
 	 */
-	private function write_csv( array $data, string $path ): true|\WP_Error {
+	private function write_csv( array $data, string $path ): bool|\WP_Error {
 		$dir = dirname( $path );
 		if ( ! is_dir( $dir ) && ! wp_mkdir_p( $dir ) ) {
 			return new \WP_Error( 'wsp_csv_clean', __( 'Не удалось создать каталог для результата.', 'flavor-worldstat' ) );

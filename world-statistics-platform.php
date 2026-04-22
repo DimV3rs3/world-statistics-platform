@@ -5,7 +5,7 @@
  * Description:       Платформа мировой статистики с системой расширений. 195 стран, интерактивная карта, UI-компоненты, REST API, SDK для разработчиков.
  * Version:           1.0.0
  * Requires at least: 5.8
- * Requires PHP:      7.4
+ * Requires PHP:      8.0
  * Author:            World Statistics Team
  * License:           GPL v2 or later
  * Text Domain:       flavor-worldstat
@@ -27,7 +27,7 @@ define( 'WSP_DATA_DIR',      WSP_PLUGIN_DIR . 'data/' );
 define( 'WSP_INCLUDES_DIR',  WSP_PLUGIN_DIR . 'includes/' );
 define( 'WSP_TEMPLATES_DIR', WSP_PLUGIN_DIR . 'templates/' );
 define( 'WSP_ASSETS_URL',    WSP_PLUGIN_URL . 'assets/' );
-define( 'WSP_MIN_PHP',       '7.4' );
+define( 'WSP_MIN_PHP',       '8.0' );
 
 /* ─── PHP Version Check ────────────────────────────────────── */
 if ( version_compare( PHP_VERSION, WSP_MIN_PHP, '<' ) ) {
