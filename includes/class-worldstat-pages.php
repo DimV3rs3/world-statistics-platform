@@ -4,10 +4,15 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class WorldStat_Pages {
 
     const PAGES = [
-        'countries'   => [ 'title' => 'Страны мира',          'slug' => 'countries',   'content' => '[worldstat_countries_grid]' ],
-        'compare'     => [ 'title' => 'Сравнение стран',      'slug' => 'compare',     'content' => '[worldstat_compare]' ],
-        'data-themes' => [ 'title' => 'Тематические данные',  'slug' => 'data-themes', 'content' => '[worldstat_themes]' ],
-        'analysis'    => [ 'title' => 'Анализ данных',        'slug' => 'analysis-data', 'content' => '' ],
+        'countries'       => [ 'title' => 'Страны мира',          'slug' => 'countries',   'content' => '[worldstat_countries_grid]' ],
+        'compare'         => [ 'title' => 'Сравнение стран',      'slug' => 'compare',     'content' => '[worldstat_compare]' ],
+        'data-themes'     => [ 'title' => 'Тематические данные',  'slug' => 'data-themes', 'content' => '[worldstat_themes]' ],
+        'analysis'        => [ 'title' => 'Анализ данных',        'slug' => 'analysis-data', 'content' => '' ],
+        'rankings'        => [ 'title' => 'Рейтинги стран',       'slug' => 'rankings',    'content' => '' ],
+        'map-explorer'    => [ 'title' => 'Карта мира',           'slug' => 'map-explorer','content' => '' ],
+        'metrics-catalog' => [ 'title' => 'Каталог метрик',       'slug' => 'metrics-catalog', 'content' => '' ],
+        'data-panel'      => [ 'title' => 'Песочница данных',     'slug' => 'data-panel', 'content' => '' ],
+        'methodology'     => [ 'title' => 'Методология и источники', 'slug' => 'methodology', 'content' => '' ],
     ];
 
     public function __construct() {

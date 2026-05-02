@@ -73,6 +73,18 @@ class WorldStat_Country_CPT {
     }
 
     /**
+     * ID поста страны без get_post(): для массовых чтений meta (рейтинги, карты).
+     */
+    public static function get_post_id_by_code( string $iso2 ): int {
+        $map  = self::get_code_map();
+        $iso2 = strtoupper( trim( $iso2 ) );
+        if ( isset( $map[ $iso2 ] ) ) {
+            return (int) $map[ $iso2 ];
+        }
+        return 0;
+    }
+
+    /**
      * Build [iso2 => post_id] map (cached).
      */
     public static function get_code_map(): array {

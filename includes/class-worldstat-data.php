@@ -11,6 +11,9 @@ class WorldStat_Data {
 
     private WorldStat_Extensions $extensions;
 
+    /** @var int|null Год для метрик с рядами (импорт CSV → post meta). null — последний доступный год. */
+    private static ?int $value_year_context = null;
+
     public function __construct( WorldStat_Extensions $extensions ) {
         $this->extensions = $extensions;
         $this->register_global_functions();
@@ -37,24 +40,36 @@ class WorldStat_Data {
 
     /**
      * Compare countries across multiple metrics.
+     *
+     * Для метрик CSV (csv-country-meta) можно передать `year` (целое > 0) — берётся значение за год, иначе последний доступный год.
      */
     public static function compare( array $args ): array {
         $countries = $args['countries'] ?? [];
         $metrics   = $args['metrics'] ?? [];
-        $result    = [];
-
-        foreach ( $countries as $code ) {
-            $row = [ 'code' => strtoupper( $code ) ];
-            foreach ( $metrics as $metric_key ) {
-                $parts = explode( '.', $metric_key, 2 );
-                if ( count( $parts ) === 2 ) {
-                    $row[ $metric_key ] = self::get( $parts[0], $code, $parts[1] );
-                }
-            }
-            $result[] = $row;
+        $year_arg  = isset( $args['year'] ) ? (int) $args['year'] : 0;
+        $saved     = self::$value_year_context;
+        if ( $year_arg > 0 ) {
+            self::$value_year_context = $year_arg;
         }
 
-        return $result;
+        try {
+            $result = [];
+
+            foreach ( $countries as $code ) {
+                $row = [ 'code' => strtoupper( $code ) ];
+                foreach ( $metrics as $metric_key ) {
+                    $parts = explode( '.', $metric_key, 2 );
+                    if ( count( $parts ) === 2 ) {
+                        $row[ $metric_key ] = self::get( $parts[0], $code, $parts[1] );
+                    }
+                }
+                $result[] = $row;
+            }
+
+            return $result;
+        } finally {
+            self::$value_year_context = $saved;
+        }
     }
 
     /**
@@ -65,12 +80,66 @@ class WorldStat_Data {
     }
 
     /**
+     * Показатели расширений + числовые поля страны (core.*) для каталога, карты и песочницы.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function get_available_metrics_with_core(): array {
+        $metrics = self::get_available_metrics();
+        $skip    = [
+            'wsp_iso_alpha2', 'wsp_iso_alpha3', 'wsp_iso_numeric',
+            'wsp_flag', 'wsp_flag_url', 'wsp_latitude', 'wsp_longitude',
+        ];
+        foreach ( WorldStat_Meta::FIELDS as $field_key => $def ) {
+            if ( in_array( $field_key, $skip, true ) ) {
+                continue;
+            }
+            $type = strtolower( (string) ( $def['type'] ?? 'string' ) );
+            if ( ! in_array( $type, [ 'integer', 'number', 'float', 'double' ], true ) ) {
+                continue;
+            }
+            $slug = str_replace( 'wsp_', '', $field_key );
+            $key  = 'core.' . $slug;
+            if ( isset( $metrics[ $key ] ) ) {
+                continue;
+            }
+            $metrics[ $key ] = [
+                'extension'     => 'core',
+                'metric'        => $slug,
+                'label'         => $def['label'] ?? $slug,
+                'type'          => $def['type'],
+                'unit'          => '',
+                'description'   => '',
+                'level'         => 'country',
+            ];
+        }
+        return $metrics;
+    }
+
+    public static function set_value_year_context( ?int $year ): void {
+        self::$value_year_context = ( $year !== null && $year > 0 ) ? $year : null;
+    }
+
+    public static function get_value_year_context(): ?int {
+        return self::$value_year_context;
+    }
+
+    public static function reset_value_year_context(): void {
+        self::$value_year_context = null;
+    }
+
+    /**
      * Get data for all countries for a specific metric (for map coloring).
      */
     public static function get_for_map( string $ext_id, string $metric ): array {
-        $map  = WorldStat_Country_CPT::get_code_map();
-        $data = [];
+        $map = WorldStat_Country_CPT::get_code_map();
 
+        if ( $ext_id === 'csv-country-meta' && class_exists( 'WorldStat_Csv_Country_Meta_Importer' ) ) {
+            $year_ctx = self::get_value_year_context();
+            return WorldStat_Csv_Country_Meta_Importer::get_metric_values_for_iso_list( array_keys( $map ), $metric, $year_ctx );
+        }
+
+        $data = [];
         foreach ( $map as $iso2 => $post_id ) {
             $val = self::get( $ext_id, $iso2, $metric );
             if ( $val !== null ) {

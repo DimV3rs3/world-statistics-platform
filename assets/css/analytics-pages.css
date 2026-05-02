@@ -1,0 +1,337 @@
+/**
+ * Analytics Pages — дополнительные стили
+ * (то, чего нет в platform.css и components.css)
+ */
+
+/* Hero секция (нет в существующих) */
+.analytics-hero {
+    text-align: center;
+    padding: 2rem 0 3rem;
+}
+
+.analytics-hero__title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 0.5rem;
+}
+
+.analytics-hero__subtitle {
+    font-size: 1rem;
+    color: #6b7280;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* Фильтры для рейтингов (кастомные) */
+.rankings-filters {
+    background: #f9fafb;
+    padding: 1.25rem;
+    border-radius: 0.75rem;
+    margin-bottom: 2rem;
+}
+
+.rankings-filters__row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.rankings-filters__group {
+    flex: 1;
+    min-width: 180px;
+}
+
+.rankings-filters__group label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #6b7280;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+}
+
+/* Рейтинговая таблица (дополнение к .wsp-table) */
+.rankings-table .rankings-rank {
+    font-weight: 700;
+    color: #6366f1;
+    width: 60px;
+}
+
+/* Map Explorer layout */
+.map-explorer-layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 1.5rem;
+}
+
+.map-explorer-sidebar {
+    background: #f9fafb;
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+}
+
+.map-explorer-legend {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.map-explorer-legend__scale {
+    height: 8px;
+    border-radius: 4px;
+    margin-bottom: 0.25rem;
+}
+
+.map-explorer-legend__labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: #6b7280;
+}
+
+/* Каталог метрик — дополнительные фильтры */
+.metrics-catalog-filters {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.metrics-catalog-search {
+    flex: 2;
+    min-width: 200px;
+}
+
+.metrics-catalog-filter {
+    flex: 1;
+    min-width: 150px;
+}
+
+/* Placeholder для страниц в разработке */
+.analytics-placeholder {
+    text-align: center;
+    padding: 4rem 2rem;
+}
+
+.analytics-placeholder__icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .map-explorer-layout {
+        grid-template-columns: 1fr;
+    }
+    .rankings-filters__row {
+        flex-direction: column;
+    }
+    .metrics-catalog-filters {
+        flex-direction: column;
+    }
+}
+
+/* ============================================= */
+/* MAP EXPLORER — дополнения */
+/* ============================================= */
+
+/* Слои в сайдбаре */
+.map-layers-group {
+    margin-bottom: 1rem;
+}
+
+.map-layers-group__name {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #9ca3af;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
+.map-layer-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    margin-bottom: 0.25rem;
+}
+
+.map-layer-item:hover {
+    background: #f3f4f6;
+}
+
+.map-layer-item--active {
+    background: #eef2ff;
+}
+
+.map-layer-item--highlight {
+    background: #fef3c7 !important;
+    transition: background 0.3s ease;
+}
+
+.map-layer-item__color {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.map-layer-item__name {
+    flex: 1;
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.map-layer-item__unit {
+    font-size: 0.7rem;
+    color: #9ca3af;
+}
+
+.map-layer-checkbox {
+    accent-color: #6366f1;
+}
+
+/* Активные слои над картой */
+.map-active-layers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.map-active-layer-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    background: #f9fafb;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.map-active-layer-tag:hover {
+    background: #e5e7eb;
+}
+
+.map-active-layer-remove {
+    background: none;
+    border: none;
+    font-size: 1rem;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.map-active-layer-remove:hover {
+    color: #ef4444;
+}
+
+/* Обёртка SVG карты */
+.map-explorer-svg-wrapper {
+    position: relative;
+    background: #f3f4f6;
+    border-radius: 0.75rem;
+    min-height: 500px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.map-explorer-empty {
+    text-align: center;
+    color: #9ca3af;
+    padding: 3rem;
+}
+
+/* Тултип карты */
+.map-tooltip {
+    position: absolute;
+    background: #1f2937;
+    color: #fff;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    pointer-events: none;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    max-width: 250px;
+}
+
+.map-tooltip__country {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.map-tooltip__values {
+    font-size: 0.75rem;
+    color: #d1d5db;
+}
+
+/* Страна на SVG карте */
+.map-country {
+    stroke: #fff;
+    stroke-width: 0.5;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.map-country:hover {
+    opacity: 0.8;
+    stroke-width: 1.5;
+}
+
+.map-country-label {
+    font-size: 6px;
+    fill: #374151;
+    text-anchor: middle;
+    pointer-events: none;
+    font-weight: 600;
+}
+
+/* Сайдбар */
+.map-explorer-sidebar__section {
+    margin-bottom: 1rem;
+}
+
+.map-explorer-sidebar__label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 0.25rem;
+}
+
+.map-explorer-sidebar__hint {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-bottom: 0.75rem;
+}
+
+/* Легенда */
+.map-explorer-legend {
+    padding: 0.75rem;
+    background: #f9fafb;
+    border-radius: 0.5rem;
+}
+
+.map-explorer-legend__gradient {
+    height: 12px;
+    border-radius: 6px;
+    background: linear-gradient(to right, #22c55e, #eab308, #ef4444);
+    margin-bottom: 0.25rem;
+}
+
+.map-explorer-legend__labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: #6b7280;
+}

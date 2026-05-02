@@ -259,7 +259,21 @@ class WorldStat_Extensions {
         $provider = $this->providers[ $key ] ?? null;
 
         if ( $provider && is_callable( $provider['callback'] ) ) {
-            return call_user_func( $provider['callback'], $country_code );
+            try {
+                return call_user_func( $provider['callback'], $country_code );
+            } catch ( \Throwable $e ) {
+                if ( defined( 'WP_DEBUG' ) && WP_DEBUG && function_exists( 'error_log' ) ) {
+                    // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+                    error_log(
+                        sprintf(
+                            '[World Statistics Platform] Metric provider error (%s.%s): %s',
+                            $ext_id,
+                            $metric,
+                            $e->getMessage()
+                        )
+                    );
+                }
+            }
         }
 
         return apply_filters( 'worldstat_get_data', null, $ext_id, $country_code, $metric );

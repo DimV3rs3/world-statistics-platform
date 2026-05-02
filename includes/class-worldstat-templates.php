@@ -46,10 +46,15 @@ class WorldStat_Templates {
         $pages   = get_option( 'wsp_pages', [] );
 
         $map = [
-            'countries'   => 'page-countries.php',
-            'compare'     => 'page-compare.php',
-            'data-themes' => 'page-data-themes.php',
-            'analysis'    => 'page-analysis.php',
+            'countries'       => 'page-countries.php',
+            'compare'         => 'page-compare.php',
+            'data-themes'     => 'page-data-themes.php',
+            'analysis'        => 'page-analysis.php',
+            'rankings'        => 'page-rankings.php',
+            'map-explorer'    => 'page-map-explorer.php',
+            'metrics-catalog' => 'page-metrics-catalog.php',
+            'data-panel'      => 'page-data-panel.php',
+            'methodology'     => 'page-methodology.php',
         ];
 
         foreach ( $map as $key => $file ) {

@@ -100,6 +100,25 @@ final class WorldStat_Core {
             wp_enqueue_script( 'worldstat-chart-builder', WSP_ASSETS_URL . 'js/chart-builder.js', [ 'chartjs' ], WSP_VERSION, true );
         }
 
+        // Дополнительные стили аналитики (общие с темой gl-analytics*)
+        $extra_ids = array_filter(
+            [
+                WorldStat_Pages::get_page_id( 'rankings' ),
+                WorldStat_Pages::get_page_id( 'map-explorer' ),
+                WorldStat_Pages::get_page_id( 'metrics-catalog' ),
+                WorldStat_Pages::get_page_id( 'data-panel' ),
+                WorldStat_Pages::get_page_id( 'methodology' ),
+            ]
+        );
+        if ( array_filter( $extra_ids ) && is_page( $extra_ids ) ) {
+            wp_enqueue_style(
+                'wsp-analytics-extras',
+                WSP_ASSETS_URL . 'css/analytics-pages.css',
+                [],
+                WSP_VERSION
+            );
+        }
+
         // Pre-enqueue Leaflet & TopoJSON on country pages so AJAX-loaded tabs can use them
         if ( is_singular( WorldStat_Country_CPT::SLUG ) ) {
             // Chart.js + builder (local assets for offline support)
@@ -143,6 +162,11 @@ final class WorldStat_Core {
             WorldStat_Pages::get_page_id( 'compare' ),
             WorldStat_Pages::get_page_id( 'data-themes' ),
             WorldStat_Pages::get_page_id( 'analysis' ),
+            WorldStat_Pages::get_page_id( 'rankings' ),
+            WorldStat_Pages::get_page_id( 'map-explorer' ),
+            WorldStat_Pages::get_page_id( 'metrics-catalog' ),
+            WorldStat_Pages::get_page_id( 'data-panel' ),
+            WorldStat_Pages::get_page_id( 'methodology' ),
         ] );
 
         if ( is_page( $page_ids ) ) return true;
@@ -150,7 +174,17 @@ final class WorldStat_Core {
         // Fallback: analysis page by slug, even if option IDs are out of sync.
         if ( is_page() ) {
             $slug = (string) get_post_field( 'post_name', get_queried_object_id() );
-            if ( $slug === 'analysis-data' ) return true;
+            $platform_slugs = [
+                'analysis-data',
+                'rankings',
+                'map-explorer',
+                'metrics-catalog',
+                'data-panel',
+                'methodology',
+            ];
+            if ( in_array( $slug, $platform_slugs, true ) ) {
+                return true;
+            }
         }
 
         return (bool) apply_filters( 'worldstat_is_platform_page', false );

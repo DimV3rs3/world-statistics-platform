@@ -681,5 +681,255 @@ class WorldStat_Csv_Country_Meta_Importer {
 				'callback' => array( self::class, 'render_country_tab' ),
 			)
 		);
+
+		self::register_csv_metric_providers();
+	}
+
+	/**
+	 * Контингентные ключи вида slug__suffix из «широких» CSV сохраняем как есть (sanitize при импорте).
+	 * Провайдеры нужны каталогу, рейтингам и карте.
+	 */
+	private static function register_csv_metric_providers(): void {
+		if ( ! function_exists( 'worldstat_register_provider' ) ) {
+			return;
+		}
+		foreach ( self::merged_metric_slugs() as $slug ) {
+			if ( $slug === '' ) {
+				continue;
+			}
+			worldstat_register_provider(
+				'csv-country-meta',
+				(string) $slug,
+				self::make_csv_meta_provider( (string) $slug ),
+				array(
+					'label'       => self::human_label_for_slug( (string) $slug ),
+					'type'        => 'number',
+					'unit'        => '',
+					'description' => __( 'Ряд из импортированного CSV', 'flavor-worldstat' ),
+					'level'       => 'country',
+				)
+			);
+		}
+	}
+
+	/** @return list<string> */
+	private static function merged_metric_slugs(): array {
+		$rev       = (int) get_option( self::OPTION_IMPORT_REVISION, 0 );
+		$cache_key = 'wsp_csv_slug_merge_' . (string) $rev;
+		$cached    = wp_cache_get( $cache_key, 'worldstat' );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+		$opt = get_option( self::OPTION_METRIC_SLUGS, array() );
+		$opt = is_array( $opt )
+			? array_values( array_unique( array_map( 'sanitize_key', $opt ) ) )
+			: array();
+		$db   = self::discover_metric_slugs_from_db();
+		$merged = array_values( array_unique( array_merge( $opt, $db ) ) );
+		wp_cache_set( $cache_key, $merged, 'worldstat', HOUR_IN_SECONDS );
+		return $merged;
+	}
+
+	/** @return list<string> */
+	private static function discover_metric_slugs_from_db(): array {
+		global $wpdb;
+		$ptype = WorldStat_Country_CPT::SLUG;
+		$like  = $wpdb->esc_like( self::META_PREFIX ) . '%';
+		$keys = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT DISTINCT pm.meta_key FROM {$wpdb->postmeta} pm
+				 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+				 WHERE p.post_type = %s AND pm.meta_key LIKE %s",
+				$ptype,
+				$like
+			)
+		);
+		if ( empty( $keys ) ) {
+			return array();
+		}
+		$plen = strlen( self::META_PREFIX );
+		$out  = array();
+		foreach ( (array) $keys as $mk ) {
+			$slug = sanitize_key( substr( (string) $mk, $plen ) );
+			if ( $slug !== '' ) {
+				$out[] = $slug;
+			}
+		}
+		return array_values( array_unique( $out ) );
+	}
+
+	/**
+	 * @return callable callable( string $iso2 ): float|null
+	 */
+	private static function make_csv_meta_provider( string $slug ): callable {
+		return static function ( string $iso2 ) use ( $slug ) {
+			$y = null;
+			if ( class_exists( 'WorldStat_Data' ) ) {
+				$y = WorldStat_Data::get_value_year_context();
+			}
+			return self::get_metric_value_for_iso2( $iso2, $slug, $y );
+		};
+	}
+
+	/**
+	 * Значение ряда wsp_metric_{slug} для ISO2 (последний год или указанный).
+	 */
+	public static function get_metric_value_for_iso2( string $iso2, string $slug, ?int $year = null ): ?float {
+		$iso2 = strtoupper( trim( $iso2 ) );
+		$slug = sanitize_key( $slug );
+		if ( $slug === '' ) {
+			return null;
+		}
+		$post_id = WorldStat_Country_CPT::get_post_id_by_code( $iso2 );
+		if ( $post_id < 1 ) {
+			return null;
+		}
+		$data = get_post_meta( $post_id, self::META_PREFIX . $slug, true );
+		return self::value_from_year_series_meta( $data, $year );
+	}
+
+	/**
+	 * Одним запросом — значения метрики для списка ISO2 (рейтинги, тяжёлые страницы без N× get_post).
+	 *
+	 * @param list<string> $iso2_list
+	 * @return array<string,float> ключ — ISO2 в верхнем регистре
+	 */
+	public static function get_metric_values_for_iso_list( array $iso2_list, string $slug, ?int $year = null ): array {
+		$slug = sanitize_key( $slug );
+		if ( $slug === '' || empty( $iso2_list ) ) {
+			return array();
+		}
+		$code_map = WorldStat_Country_CPT::get_code_map();
+		$post_ids = array();
+		$iso_by_pid = array();
+		foreach ( $iso2_list as $iso ) {
+			$iu = strtoupper( trim( (string) $iso ) );
+			if ( $iu === '' || ! isset( $code_map[ $iu ] ) ) {
+				continue;
+			}
+			$pid = (int) $code_map[ $iu ];
+			if ( $pid < 1 ) {
+				continue;
+			}
+			$post_ids[ $pid ] = true;
+			$iso_by_pid[ $pid ] = $iu;
+		}
+		$pids = array_keys( $post_ids );
+		if ( empty( $pids ) ) {
+			return array();
+		}
+
+		global $wpdb;
+		$meta_key     = self::META_PREFIX . $slug;
+		$placeholders = implode( ',', array_fill( 0, count( $pids ), '%d' ) );
+		$prepare_args = array_merge(
+			array( "SELECT post_id, meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s AND post_id IN ($placeholders)", $meta_key ),
+			array_map( 'intval', $pids )
+		);
+		$sql  = $wpdb->prepare( ...$prepare_args );
+		$rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		if ( empty( $rows ) ) {
+			return array();
+		}
+
+		$out = array();
+		foreach ( $rows as $row ) {
+			$pid  = isset( $row['post_id'] ) ? (int) $row['post_id'] : 0;
+			$iso2 = $iso_by_pid[ $pid ] ?? '';
+			if ( $iso2 === '' ) {
+				continue;
+			}
+			$data = maybe_unserialize( $row['meta_value'] ?? null );
+			$fv   = self::value_from_year_series_meta( $data, $year );
+			if ( $fv !== null ) {
+				$out[ $iso2 ] = $fv;
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * @param mixed $data Значение post meta ряда [ год => число ]
+	 */
+	private static function value_from_year_series_meta( $data, ?int $year ): ?float {
+		if ( ! is_array( $data ) || empty( $data ) ) {
+			return null;
+		}
+
+		if ( $year !== null && $year > 0 ) {
+			$raw = $data[ $year ] ?? $data[ (string) $year ] ?? null;
+			if ( $raw !== null && is_numeric( $raw ) ) {
+				$fv = (float) $raw;
+				return is_finite( $fv ) ? $fv : null;
+			}
+			return null;
+		}
+
+		krsort( $data, SORT_NUMERIC );
+		foreach ( $data as $y => $v ) {
+			$yi = (int) $y;
+			if ( $yi <= 0 || ! is_numeric( $v ) ) {
+				continue;
+			}
+			$fv = (float) $v;
+			if ( ! is_finite( $fv ) ) {
+				continue;
+			}
+			return $fv;
+		}
+		return null;
+	}
+
+	/**
+	 * Отсортированный по убыванию список годов, где у любой страны есть значение метрики.
+	 *
+	 * @return list<int>
+	 */
+	public static function get_years_union_for_slug( string $slug ): array {
+		$slug = sanitize_key( $slug );
+		if ( $slug === '' ) {
+			return array();
+		}
+		$rev       = (int) get_option( self::OPTION_IMPORT_REVISION, 0 );
+		$cache_key = 'wsp_csv_years_' . $slug . '_' . (string) $rev;
+		$cached    = wp_cache_get( $cache_key, 'worldstat' );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+		$years = array();
+
+		global $wpdb;
+		$meta_key = self::META_PREFIX . $slug;
+		// Один запрос вместо N× get_post_meta по всем странам.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT pm.meta_value FROM {$wpdb->postmeta} pm
+				 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+				 WHERE p.post_type = %s AND p.post_status = %s AND pm.meta_key = %s",
+				WorldStat_Country_CPT::SLUG,
+				'publish',
+				$meta_key
+			),
+			ARRAY_A
+		);
+
+		foreach ( (array) $rows as $row ) {
+			$data = maybe_unserialize( $row['meta_value'] ?? null );
+			if ( ! is_array( $data ) || empty( $data ) ) {
+				continue;
+			}
+			foreach ( $data as $y => $v ) {
+				$yi = (int) $y;
+				if ( $yi <= 0 || ! is_numeric( $v ) ) {
+					continue;
+				}
+				$years[ $yi ] = true;
+			}
+		}
+
+		$list = array_map( 'intval', array_keys( $years ) );
+		rsort( $list, SORT_NUMERIC );
+		wp_cache_set( $cache_key, $list, 'worldstat', HOUR_IN_SECONDS );
+		return $list;
 	}
 }
