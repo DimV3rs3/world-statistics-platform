@@ -51,6 +51,9 @@ $all_metrics = array_filter( $all_metrics, fn($m) => in_array( strtolower( $m['t
 $cur_metric = $_GET['metric'] ?? array_key_first( $all_metrics );
 $cur_region = $_GET['region'] ?? '';
 $cur_year = isset( $_GET['year'] ) ? intval( $_GET['year'] ) : 0;
+if ( $cur_year > 0 && class_exists( 'WorldStat_Platform_Years' ) ) {
+	$cur_year = WorldStat_Platform_Years::clamp( $cur_year );
+}
 if ( ! isset( $all_metrics[ $cur_metric ] ) ) $cur_metric = array_key_first( $all_metrics );
 
 if ( empty( $all_metrics ) ) {

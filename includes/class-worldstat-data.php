@@ -302,7 +302,7 @@ class WorldStat_Data {
             }
 
             $nice = $metric_icons[ $slug ] ?? [
-                'label' => $this->humanize_label( $label ),
+                'label' => $this->resolve_country_csv_metric_label_ru( $slug, $label ),
                 'icon'  => 'chart-bar',
             ];
             $grid_items[] = [
@@ -727,6 +727,18 @@ class WorldStat_Data {
     private function humanize_label( string $label ): string {
         $label = str_replace( [ '_', '-' ], ' ', trim( $label ) );
         return ucwords( strtolower( $label ) );
+    }
+
+    /**
+     * Подпись показателя для карточки обзора: словарь админки эргономики (CSV «Переводы»)
+     * или запасной humanize по подписи из файла.
+     */
+    private function resolve_country_csv_metric_label_ru( string $slug, string $csv_label ): string {
+        if ( class_exists( 'WSErgo_Country_Macro_Calculator' ) ) {
+            return WSErgo_Country_Macro_Calculator::data_label_ru( $slug );
+        }
+        $csv_label = trim( $csv_label );
+        return $this->humanize_label( $csv_label !== '' ? $csv_label : $slug );
     }
 
     /**

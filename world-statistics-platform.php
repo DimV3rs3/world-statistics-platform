@@ -29,6 +29,14 @@ define( 'WSP_TEMPLATES_DIR', WSP_PLUGIN_DIR . 'templates/' );
 define( 'WSP_ASSETS_URL',    WSP_PLUGIN_URL . 'assets/' );
 define( 'WSP_MIN_PHP',       '8.0' );
 
+/** Допустимый диапазон календарных лет в UI (селекты, поля ввода года). Расширяемый через переопределение констант в wp-config. */
+if ( ! defined( 'WSP_CALENDAR_YEAR_MIN' ) ) {
+	define( 'WSP_CALENDAR_YEAR_MIN', 1990 );
+}
+if ( ! defined( 'WSP_CALENDAR_YEAR_MAX' ) ) {
+	define( 'WSP_CALENDAR_YEAR_MAX', max( 2035, (int) gmdate( 'Y' ) + 5 ) );
+}
+
 /* ─── PHP Version Check ────────────────────────────────────── */
 if ( version_compare( PHP_VERSION, WSP_MIN_PHP, '<' ) ) {
     add_action( 'admin_notices', function () {
@@ -47,6 +55,7 @@ $wsp_includes = [
     'includes/class-worldstat-extensions.php',
     'includes/class-worldstat-data.php',
     'includes/class-worldstat-analysis.php',
+    'includes/class-worldstat-platform-years.php',
     'includes/class-worldstat-ui.php',
     'includes/class-worldstat-country-cpt.php',
     'includes/class-worldstat-taxonomies.php',

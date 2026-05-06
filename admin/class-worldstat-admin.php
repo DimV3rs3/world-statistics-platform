@@ -18,6 +18,7 @@ class WorldStat_Admin {
         add_action( 'admin_menu', [ $this, 'register_menus' ], 5 );
         // CSV upload/delete must run before admin-header (redirect); page callback runs too late.
         add_action( 'admin_init', [ $this, 'handle_csv_admin_post' ], 0 );
+        add_action( 'admin_init', [ $this, 'handle_csv_translations_post' ], 0 );
         add_action( 'admin_init', [ $this, 'maybe_redirect_stale_csv_error' ], 1 );
         add_action( 'admin_init', [ $this, 'register_settings' ] );
         add_action( 'admin_post_wsp_csv_delete', [ $this, 'handle_csv_delete_post' ] );
@@ -50,6 +51,7 @@ class WorldStat_Admin {
 
         // User CSV uploads
         add_submenu_page( 'worldstat', 'Данные CSV', 'Данные CSV', 'manage_options', 'worldstat-csv', [ $this, 'page_csv_data' ] );
+        add_submenu_page( 'worldstat', __( 'Переводы показателей', 'flavor-worldstat' ), __( 'Переводы', 'flavor-worldstat' ), 'manage_options', 'worldstat-csv-translations', [ $this, 'page_csv_translations' ] );
 
         // Settings
         add_submenu_page( 'worldstat', 'Настройки', 'Настройки', 'manage_options', 'worldstat-settings', [ $this, 'page_settings' ] );
@@ -137,6 +139,136 @@ class WorldStat_Admin {
     }
 
     /**
+     * Импорт UTF-8 CSV «ключ → русская подпись» в опцию эргономики wsergo_data_labels_ru.
+     */
+    public function handle_csv_translations_post(): void {
+        if ( ! isset( $_GET['page'] ) || sanitize_text_field( wp_unslash( $_GET['page'] ) ) !== 'worldstat-csv-translations' ) {
+            return;
+        }
+        if ( ! isset( $_POST['wsp_csv_translations_nonce'] ) ) {
+            return;
+        }
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Недостаточно прав.', 'flavor-worldstat' ), '', [ 'response' => 403 ] );
+        }
+        check_admin_referer( 'wsp_csv_translations_upload', 'wsp_csv_translations_nonce' );
+
+        if ( empty( $_FILES['wsp_translations_csv']['tmp_name'] ) ) {
+            WorldStat_Uploaded_Csv::set_admin_error_flash( __( 'Выберите файл CSV.', 'flavor-worldstat' ) );
+            wp_safe_redirect( admin_url( 'admin.php?page=worldstat-csv-translations&wsp_tr_msg=error' ) );
+            exit;
+        }
+        if ( ! isset( $_FILES['wsp_translations_csv']['error'] ) || (int) $_FILES['wsp_translations_csv']['error'] !== UPLOAD_ERR_OK ) {
+            WorldStat_Uploaded_Csv::set_admin_error_flash( __( 'Файл не был загружен.', 'flavor-worldstat' ) );
+            wp_safe_redirect( admin_url( 'admin.php?page=worldstat-csv-translations&wsp_tr_msg=error' ) );
+            exit;
+        }
+        if ( ! class_exists( 'WSErgo_Settings' ) ) {
+            WorldStat_Uploaded_Csv::set_admin_error_flash( __( 'Нужен активный плагин WorldStat — Ergonomics (опция подписей хранится там).', 'flavor-worldstat' ) );
+            wp_safe_redirect( admin_url( 'admin.php?page=worldstat-csv-translations&wsp_tr_msg=error' ) );
+            exit;
+        }
+
+        $tmp = sanitize_text_field( wp_unslash( $_FILES['wsp_translations_csv']['tmp_name'] ) );
+        if ( $tmp === '' || ! is_uploaded_file( $tmp ) || ! is_readable( $tmp ) ) {
+            WorldStat_Uploaded_Csv::set_admin_error_flash( __( 'Не удалось прочитать загруженный файл.', 'flavor-worldstat' ) );
+            wp_safe_redirect( admin_url( 'admin.php?page=worldstat-csv-translations&wsp_tr_msg=error' ) );
+            exit;
+        }
+
+        $parsed = $this->parse_translations_csv_file( $tmp );
+        if ( is_wp_error( $parsed ) ) {
+            WorldStat_Uploaded_Csv::set_admin_error_flash( $parsed->get_error_message() );
+            wp_safe_redirect( admin_url( 'admin.php?page=worldstat-csv-translations&wsp_tr_msg=error' ) );
+            exit;
+        }
+
+        $opt_key  = WSErgo_Settings::OPTION_DATA_LABELS_RU;
+        $existing = get_option( $opt_key, [] );
+        if ( ! is_array( $existing ) ) {
+            $existing = [];
+        }
+        $merged = array_merge( $existing, $parsed );
+        $merged = $this->sanitize_translations_map( $merged );
+        update_option( $opt_key, $merged, false );
+
+        $n = count( $parsed );
+
+        wp_safe_redirect( admin_url( 'admin.php?page=worldstat-csv-translations&wsp_tr_msg=ok&wsp_tr_n=' . (int) $n ) );
+        exit;
+    }
+
+    /**
+     * @param string $path Path to uploaded temp file.
+     * @return array<string, string>|\WP_Error
+     */
+    private function parse_translations_csv_file( string $path ) {
+        $fh = fopen( $path, 'rb' );
+        if ( ! $fh ) {
+            return new \WP_Error( 'wsp_tr_read', __( 'Не удалось открыть файл.', 'flavor-worldstat' ) );
+        }
+        $first = fgetcsv( $fh );
+        if ( ! is_array( $first ) || ( isset( $first[0] ) && trim( (string) $first[0] ) === '' ) ) {
+            fclose( $fh );
+            return new \WP_Error( 'wsp_tr_empty', __( 'Пустой CSV.', 'flavor-worldstat' ) );
+        }
+        $skip_first = $this->csv_row_is_translation_header( $first );
+        if ( ! $skip_first ) {
+            rewind( $fh );
+        }
+        $out = [];
+        while ( ( $row = fgetcsv( $fh ) ) !== false ) {
+            if ( ! is_array( $row ) || count( $row ) < 2 ) {
+                continue;
+            }
+            $k = sanitize_key( trim( (string) ( $row[0] ?? '' ) ) );
+            if ( $k === '' || strlen( $k ) > 96 ) {
+                continue;
+            }
+            $label = sanitize_text_field( (string) ( $row[1] ?? '' ) );
+            if ( $label === '' ) {
+                continue;
+            }
+            $out[ $k ] = $label;
+            if ( count( $out ) >= 10000 ) {
+                break;
+            }
+        }
+        fclose( $fh );
+        if ( count( $out ) < 1 ) {
+            return new \WP_Error( 'wsp_tr_nodata', __( 'Не найдено ни одной строки с двумя колонками (ключ и подпись).', 'flavor-worldstat' ) );
+        }
+        return $out;
+    }
+
+    /**
+     * @param list<string> $row
+     */
+    private function csv_row_is_translation_header( array $row ): bool {
+        $c0 = isset( $row[0] ) ? strtolower( trim( (string) $row[0] ) ) : '';
+        return in_array( $c0, [ 'key', 'slug', 'код', 'indicator', 'id', 'column', 'field' ], true );
+    }
+
+    /**
+     * @param array<string, string> $map
+     * @return array<string, string>
+     */
+    private function sanitize_translations_map( array $map ): array {
+        $out = [];
+        foreach ( $map as $k => $v ) {
+            $key = sanitize_key( (string) $k );
+            if ( $key === '' || strlen( $key ) > 96 ) {
+                continue;
+            }
+            $text = sanitize_text_field( (string) $v );
+            if ( $text !== '' ) {
+                $out[ $key ] = function_exists( 'mb_substr' ) ? mb_substr( $text, 0, 240 ) : substr( $text, 0, 240 );
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Delete uploaded CSV via admin-post.php (avoids POST to admin.php losing ?page= and runs before any output).
      */
     public function handle_csv_delete_post(): void {
@@ -212,6 +344,14 @@ class WorldStat_Admin {
 
         $wsp_csv_files = WorldStat_Uploaded_Csv::list_files();
         include WSP_PLUGIN_DIR . 'admin/views/csv-data.php';
+    }
+
+    public function page_csv_translations(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Недостаточно прав.', 'flavor-worldstat' ) );
+        }
+
+        include WSP_PLUGIN_DIR . 'admin/views/csv-translations.php';
     }
 
     /* ═══════════════════════════════════════════════════════

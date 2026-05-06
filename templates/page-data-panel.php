@@ -37,7 +37,10 @@ foreach ( $all_metrics as $key => $m ) {
 
 $selected_countries = isset( $_GET['countries'] ) ? array_filter( array_map( 'sanitize_text_field', (array) $_GET['countries'] ) ) : [];
 $selected_metrics   = isset( $_GET['metrics'] )   ? array_filter( array_map( 'sanitize_text_field', (array) $_GET['metrics'] ) )   : [];
-$panel_year         = isset( $_GET['panel_year'] ) ? max( 0, intval( $_GET['panel_year'] ) ) : 0;
+$panel_year = isset( $_GET['panel_year'] ) ? max( 0, intval( $_GET['panel_year'] ) ) : 0;
+if ( $panel_year > 0 && class_exists( 'WorldStat_Platform_Years' ) ) {
+	$panel_year = WorldStat_Platform_Years::clamp( $panel_year );
+}
 
 $panel_csv_years_union = [];
 if ( class_exists( 'WorldStat_Csv_Country_Meta_Importer' ) ) {

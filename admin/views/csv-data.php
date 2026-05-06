@@ -23,6 +23,9 @@ $wsp_csv_selected_kind = isset( $_GET['wsp_csv_kind'] )
 		<span class="dashicons dashicons-media-spreadsheet"></span>
 		<?php esc_html_e( 'Данные CSV', 'flavor-worldstat' ); ?>
 	</h1>
+	<p>
+		<a href="<?php echo esc_url( admin_url( 'admin.php?page=worldstat-csv-translations' ) ); ?>"><?php esc_html_e( 'Переводы показателей — загрузка таблицы подписей', 'flavor-worldstat' ); ?></a>
+	</p>
 
 	<?php if ( $wsp_csv_msg === 'upload_ok' && $wsp_csv_file ) : ?>
 		<?php $wsp_proc_log = WorldStat_Uploaded_Csv::take_process_log_flash(); ?>

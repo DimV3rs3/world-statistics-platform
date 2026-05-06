@@ -154,7 +154,9 @@ class WorldStat_UI {
      */
     public static function timeline( array $opts = [] ): string {
         $opts = wp_parse_args( $opts, [
-            'start' => 1990, 'end' => 2025, 'events' => [], 'echo' => true,
+            'start' => defined( 'WSP_CALENDAR_YEAR_MIN' ) ? (int) WSP_CALENDAR_YEAR_MIN : 1990,
+            'end'   => defined( 'WSP_CALENDAR_YEAR_MAX' ) ? (int) WSP_CALENDAR_YEAR_MAX : max( 2035, (int) gmdate( 'Y' ) + 5 ),
+            'events' => [], 'echo' => true,
         ] );
 
         ob_start();

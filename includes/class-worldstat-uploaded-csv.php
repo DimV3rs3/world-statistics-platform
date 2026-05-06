@@ -100,6 +100,20 @@ class WorldStat_Uploaded_Csv {
 	}
 
 	/**
+	 * Есть ли хотя бы один сохранённый в БД набор CSV (после полного удаления — false; списки ключей в эргономике не должны «висеть»).
+	 */
+	public static function has_any_stored_datasets(): bool {
+		if ( ! self::table_exists() ) {
+			return false;
+		}
+		global $wpdb;
+		$table = self::table_name();
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from prefix + constant.
+		$n = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" );
+		return $n > 0;
+	}
+
+	/**
 	 * Создание/обновление таблицы (dbDelta).
 	 */
 	public static function install_db(): void {
@@ -565,5 +579,144 @@ class WorldStat_Uploaded_Csv {
 		self::bump_files_revision();
 
 		return true;
+	}
+
+	/**
+	 * Служебные столбцы заголовка (не показатели) — совместимо с разбором wide/long в эргономике.
+	 *
+	 * @return array<string, true>
+	 */
+	private static function csv_header_meta_columns(): array {
+		return array(
+			'country_code'    => true,
+			'year'            => true,
+			'iso3'            => true,
+			'iso'             => true,
+			'cca3'            => true,
+			'country'         => true,
+			'country_name'    => true,
+			'coutry_code'     => true,
+			'countrycode'     => true,
+			'time'            => true,
+			'timeperiod'      => true,
+			'time_period'     => true,
+			'yr'              => true,
+			'value'           => true,
+			'obs_value'       => true,
+			'indicator_value' => true,
+			'val'             => true,
+			'footnote'        => true,
+			'footnotes'       => true,
+			'source'          => true,
+			'datasource'      => true,
+			'lastupdatedate'  => true,
+			'indicator_code'  => true,
+			'series_code'     => true,
+			'series_id'       => true,
+			'indicator_id'    => true,
+			'wb_series_code'  => true,
+			'itemcode'        => true,
+			'variable_code'   => true,
+			'indicatorcode'   => true,
+			'indicator_name'  => true,
+			'series_name'     => true,
+			'variable_name'   => true,
+			'indicator'       => true,
+		);
+	}
+
+	/**
+	 * Та же нормализация имён столбцов, что в макромодуле эргономики (если плагин активен).
+	 */
+	private static function normalize_csv_column_token( string $col ): string {
+		if ( class_exists( 'WSErgo_Country_Macro_Calculator' ) ) {
+			return WSErgo_Country_Macro_Calculator::normalize_csv_header_key( $col );
+		}
+		$col = trim( $col );
+		$col = preg_replace( '/^\xEF\xBB\xBF/', '', $col );
+		$c   = strtolower( str_replace( array( "\t", ' ', '-' ), '_', $col ) );
+		return (string) preg_replace( '/[^a-z0-9_]/', '', $c );
+	}
+
+	/**
+	 * Объединение ключей из заголовков всех сохранённых CSV и из import_metric_slugs (импорт в мета).
+	 *
+	 * @return list<string>
+	 */
+	public static function collect_all_metric_column_keys_uncached(): array {
+		if ( ! self::table_exists() ) {
+			return array();
+		}
+		global $wpdb;
+		$table = self::table_name();
+		$meta  = self::csv_header_meta_columns();
+		$keys  = array();
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$chunks = $wpdb->get_col( "SELECT SUBSTRING(body, 1, 65536) FROM {$table}" );
+		if ( is_array( $chunks ) ) {
+			foreach ( $chunks as $head ) {
+				$head = (string) $head;
+				if ( $head === '' ) {
+					continue;
+				}
+				foreach ( preg_split( "/\r\n|\n|\r/", $head ) as $line ) {
+					$line = trim( $line );
+					if ( $line === '' ) {
+						continue;
+					}
+					$row = str_getcsv( $line );
+					foreach ( $row as $colname ) {
+						$k = self::normalize_csv_column_token( (string) $colname );
+						if ( $k === '' || strlen( $k ) > 96 ) {
+							continue;
+						}
+						if ( isset( $meta[ $k ] ) ) {
+							continue;
+						}
+						$keys[ $k ] = true;
+					}
+					break;
+				}
+			}
+		}
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$slug_rows = $wpdb->get_col( "SELECT import_metric_slugs FROM {$table} WHERE import_metric_slugs IS NOT NULL AND import_metric_slugs != ''" );
+		if ( is_array( $slug_rows ) ) {
+			foreach ( $slug_rows as $js ) {
+				$decoded = json_decode( (string) $js, true );
+				if ( ! is_array( $decoded ) ) {
+					continue;
+				}
+				foreach ( $decoded as $slug ) {
+					$k = sanitize_key( (string) $slug );
+					if ( $k !== '' && strlen( $k ) <= 96 ) {
+						$keys[ $k ] = true;
+					}
+				}
+			}
+		}
+
+		$out = array_keys( $keys );
+		sort( $out );
+		return $out;
+	}
+
+	/**
+	 * Кеш по ревизии wsp_csv_files_revision (сбрасывается при любой загрузке/удалении CSV).
+	 *
+	 * @return list<string>
+	 */
+	public static function get_cached_all_metric_column_keys(): array {
+		$rev = (int) get_option( 'wsp_csv_files_revision', 0 );
+		$tc  = 'wsp_csv_metric_keys_' . $rev;
+		$cached = get_transient( $tc );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+		$fresh = self::collect_all_metric_column_keys_uncached();
+		set_transient( $tc, $fresh, WEEK_IN_SECONDS );
+		return $fresh;
 	}
 }
