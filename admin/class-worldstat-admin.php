@@ -169,7 +169,8 @@ class WorldStat_Admin {
             exit;
         }
 
-        $tmp = sanitize_text_field( wp_unslash( $_FILES['wsp_translations_csv']['tmp_name'] ) );
+        // Do not unslash tmp_name from $_FILES: on Windows it can break backslash-based paths.
+        $tmp = sanitize_text_field( (string) $_FILES['wsp_translations_csv']['tmp_name'] );
         if ( $tmp === '' || ! is_uploaded_file( $tmp ) || ! is_readable( $tmp ) ) {
             WorldStat_Uploaded_Csv::set_admin_error_flash( __( 'Не удалось прочитать загруженный файл.', 'flavor-worldstat' ) );
             wp_safe_redirect( admin_url( 'admin.php?page=worldstat-csv-translations&wsp_tr_msg=error' ) );
