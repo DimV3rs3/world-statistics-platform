@@ -1,5 +1,5 @@
 /**
- * Country page analytics — regression, clustering, classification (native API).
+ * Country page analytics — regression, clustering, classification.
  */
 (function ($) {
 	'use strict';
@@ -14,12 +14,50 @@
 			.replace(/"/g, '&quot;');
 	}
 
+	function i18n(key, fallback) {
+		var cfg = window.wspCountryAnalysis;
+		return (cfg && cfg.i18n && cfg.i18n[key]) ? cfg.i18n[key] : fallback;
+	}
+
 	function setStatus(text) {
 		$('#wsp-country-analysis-status').text(text || '');
 	}
 
+	function filterClusterPicks() {
+		var cat = $('#wsp-country-analysis-cluster-cat').val() || 'all';
+		$('#wsp-cluster-metric-picks .wsp-ca-metric-pick').each(function () {
+			var $el = $(this);
+			var show = cat === 'all' || $el.data('category') === cat;
+			$el.toggle(show);
+		});
+	}
+
+	function setVisibleClusterChecks(checked) {
+		var cat = $('#wsp-country-analysis-cluster-cat').val() || 'all';
+		$('#wsp-cluster-metric-picks .wsp-ca-metric-pick').each(function () {
+			var $el = $(this);
+			if (!$el.is(':visible')) {
+				return;
+			}
+			if (cat === 'all' || $el.data('category') === cat) {
+				$el.find('input[type="checkbox"]').prop('checked', !!checked);
+			}
+		});
+	}
+
+	function collectClusterMetricIds() {
+		var ids = [];
+		$('#wsp-cluster-metric-picks input[type="checkbox"]:checked').each(function () {
+			var v = $(this).val();
+			if (v) {
+				ids.push(v);
+			}
+		});
+		return ids;
+	}
+
 	function renderChart($container, chartCfg) {
-		if (!chartCfg || typeof window.WSPChart === 'undefined') {
+		if (!chartCfg) {
 			return;
 		}
 		chartSeq += 1;
@@ -84,14 +122,13 @@
 			$root.append($b);
 			return;
 		}
-		var i18n = (window.wspCountryAnalysis && window.wspCountryAnalysis.i18n) || {};
 		var st = data.stats || {};
 		var html = '<div class="wsp-ca-stats">';
-		html += '<span><strong>' + esc(i18n.r2 || 'R²') + ':</strong> ' + esc(st.r2) + '</span>';
-		html += '<span><strong>' + esc(i18n.trend || 'Тренд') + ':</strong> ' + esc(st.direction) + '</span>';
+		html += '<span><strong>' + esc(i18n('r2', 'R²')) + ':</strong> ' + esc(st.r2) + '</span>';
+		html += '<span><strong>' + esc(i18n('trend', 'Тренд')) + ':</strong> ' + esc(st.direction) + '</span>';
 		if (st.forecast) {
-			html += '<span><strong>' + esc(i18n.forecast || 'Прогноз') + ':</strong> '
-				+ esc(st.forecast.value) + ' (' + esc(st.forecast.year) + ' ' + esc(i18n.year || 'г.') + ')</span>';
+			html += '<span><strong>' + esc(i18n('forecast', 'Прогноз')) + ':</strong> '
+				+ esc(st.forecast.value) + ' (' + esc(st.forecast.year) + ' ' + esc(i18n('year', 'г.') ) + ')</span>';
 		}
 		html += '</div>';
 		$b.append(html);
@@ -106,13 +143,12 @@
 			$root.append($b);
 			return;
 		}
-		var i18n = (window.wspCountryAnalysis && window.wspCountryAnalysis.i18n) || {};
 		var $ul = $('<ul class="wsp-ca-groups"></ul>');
 		(data.groups || []).forEach(function (group, idx) {
 			if (!group || !group.length) {
 				return;
 			}
-			$ul.append('<li><strong>' + esc((i18n.cluster || 'Кластер') + ' ' + (idx + 1)) + ':</strong> '
+			$ul.append('<li><strong>' + esc(i18n('cluster', 'Кластер') + ' ' + (idx + 1)) + ':</strong> '
 				+ esc(group.join(', ')) + '</li>');
 		});
 		$b.append($ul);
@@ -130,10 +166,11 @@
 		var rows = data.timeline || [];
 		if (rows.length) {
 			var tbl = '<table class="wsp-ca-timeline"><thead><tr><th>'
-				+ esc((window.wspCountryAnalysis && window.wspCountryAnalysis.i18n && window.wspCountryAnalysis.i18n.years) || 'Год')
-				+ '</th><th>' + esc('Период') + '</th></tr></thead><tbody>';
+				+ esc(i18n('years', 'Год')) + '</th><th>'
+				+ esc(i18n('value', 'Значение')) + '</th><th>'
+				+ esc(i18n('period', 'Уровень')) + '</th></tr></thead><tbody>';
 			rows.forEach(function (r) {
-				tbl += '<tr><td>' + esc(r.year) + '</td><td>' + esc(r.period) + '</td></tr>';
+				tbl += '<tr><td>' + esc(r.year) + '</td><td>' + esc(r.value) + '</td><td>' + esc(r.period) + '</td></tr>';
 			});
 			tbl += '</tbody></table>';
 			$b.append(tbl);
@@ -159,25 +196,40 @@
 		if (!cfg || !cfg.ajaxUrl) {
 			return;
 		}
+
+		var metricId = $('#wsp-country-analysis-metric').val() || '';
+		var clusterIds = collectClusterMetricIds();
+
+		if (!metricId && !clusterIds.length) {
+			setStatus(i18n('pickEither', 'Выберите показатель и/или отметьте показатели для кластеризации.'));
+			$('#wsp-country-analysis-results').html(
+				'<p class="wsp-ca-notice">' + esc(i18n('pickEither', 'Выберите показатель и/или отметьте показатели.')) + '</p>'
+			);
+			return;
+		}
+
 		var $btn = $('#wsp-country-analysis-run');
 		$btn.prop('disabled', true);
-		setStatus(cfg.i18n && cfg.i18n.running ? cfg.i18n.running : '…');
+		setStatus(i18n('running', 'Расчёт…'));
 
 		$.post(cfg.ajaxUrl, {
 			action: 'worldstat_run_country_analysis',
 			nonce: cfg.nonce,
 			post_id: cfg.postId,
-			metric_id: $('#wsp-country-analysis-metric').val() || '',
-			k: parseInt($('#wsp-country-analysis-k').val(), 10) || 3
+			metric_id: metricId,
+			k_cluster: parseInt($('#wsp-country-analysis-k-cluster').val(), 10) || 3,
+			k_classify: parseInt($('#wsp-country-analysis-k-classify').val(), 10) || 3,
+			cluster_category: $('#wsp-country-analysis-cluster-cat').val() || 'all',
+			cluster_metrics: clusterIds
 		})
 			.done(function (res) {
 				if (res && res.success && res.data) {
 					renderResults(res.data);
-					setStatus(cfg.i18n && cfg.i18n.done ? cfg.i18n.done : '');
+					setStatus(i18n('done', 'Готово'));
 				} else {
 					var msg = (res && res.data && res.data.message) ? res.data.message : 'Error';
 					$('#wsp-country-analysis-results').html('<p class="wsp-ca-notice">' + esc(msg) + '</p>');
-					setStatus(cfg.i18n && cfg.i18n.error ? cfg.i18n.error : '');
+					setStatus(i18n('error', 'Ошибка'));
 				}
 			})
 			.fail(function (xhr) {
@@ -188,7 +240,7 @@
 					}
 				} catch (e) { /* ignore */ }
 				$('#wsp-country-analysis-results').html('<p class="wsp-ca-notice">' + esc(msg) + '</p>');
-				setStatus(cfg.i18n && cfg.i18n.error ? cfg.i18n.error : '');
+				setStatus(i18n('error', 'Ошибка'));
 			})
 			.always(function () {
 				$btn.prop('disabled', false);
@@ -199,9 +251,17 @@
 		if (!$('#wsp-country-analytics').length) {
 			return;
 		}
+
+		filterClusterPicks();
+
+		$('#wsp-country-analysis-cluster-cat').on('change', filterClusterPicks);
+		$('#wsp-cluster-select-visible').on('click', function () {
+			setVisibleClusterChecks(true);
+		});
+		$('#wsp-cluster-clear-visible').on('click', function () {
+			setVisibleClusterChecks(false);
+		});
+
 		$('#wsp-country-analysis-run').on('click', runAnalysis);
-		if (window.wspCountryAnalysis && window.wspCountryAnalysis.autoRun) {
-			runAnalysis();
-		}
 	});
 }(jQuery));

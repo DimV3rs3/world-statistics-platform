@@ -1,6 +1,6 @@
 <?php
 /**
- * Блок аналитики на странице страны (собственные алгоритмы под ряды по годам).
+ * Блок аналитики на странице страны.
  *
  * @package WorldStat
  */
@@ -35,9 +35,9 @@ class WorldStat_Country_Analysis {
 			return;
 		}
 
-		self::enqueue_assets( $post_id, $chartable );
+		self::enqueue_assets( $post_id );
 
-		$default_id = (string) ( $chartable[0]['metric_id'] ?? $chartable[0]['slug'] ?? '' );
+		$cat_labels = WorldStat_Country_ML::category_labels();
 
 		echo '<section class="wsp-country-analytics" id="wsp-country-analytics" aria-labelledby="wsp-country-analytics-title">';
 		echo '<header class="wsp-country-analytics__head">';
@@ -46,7 +46,7 @@ class WorldStat_Country_Analysis {
 		echo '</h3>';
 		echo '<p class="wsp-country-analytics__desc">';
 		echo esc_html__(
-			'Регрессия тренда, кластеризация показателей и классификация лет по профилю данных — только CSV-метрики этой страны.',
+			'Регрессия и классификация — по выбранному показателю. Кластеризация — по отмеченным показателям и теме.',
 			'flavor-worldstat'
 		);
 		echo '</p>';
@@ -60,35 +60,84 @@ class WorldStat_Country_Analysis {
 		echo '</p>';
 		echo '</header>';
 
-		echo '<div class="wsp-country-analytics__controls">';
+		echo '<div class="wsp-country-analytics__controls wsp-country-analytics__controls--grid">';
+
+		echo '<div class="wsp-ca-control wsp-ca-control--metric">';
 		echo '<label class="wsp-country-analytics__field" for="wsp-country-analysis-metric">';
-		echo esc_html__( 'Показатель для тренда', 'flavor-worldstat' );
+		echo esc_html__( 'Показатель (регрессия и классификация)', 'flavor-worldstat' );
 		echo '</label>';
 		echo '<select id="wsp-country-analysis-metric" class="wsp-select">';
+		echo '<option value="">' . esc_html__( '— выберите показатель —', 'flavor-worldstat' ) . '</option>';
 		foreach ( $chartable as $item ) {
 			$mid = (string) ( $item['metric_id'] ?? $item['slug'] ?? '' );
 			printf(
-				'<option value="%s"%s>%s</option>',
+				'<option value="%s">%s</option>',
 				esc_attr( $mid ),
-				selected( $default_id, $mid, false ),
 				esc_html( (string) ( $item['label'] ?? $mid ) )
 			);
 		}
 		echo '</select>';
+		echo '</div>';
 
-		echo '<label class="wsp-country-analytics__field" for="wsp-country-analysis-k">';
-		echo esc_html__( 'Число групп (k)', 'flavor-worldstat' );
+		echo '<div class="wsp-ca-control wsp-ca-control--narrow">';
+		echo '<label class="wsp-country-analytics__field" for="wsp-country-analysis-k-classify">';
+		echo esc_html__( 'k — периоды (классификация)', 'flavor-worldstat' );
 		echo '</label>';
-		echo '<input type="number" id="wsp-country-analysis-k" class="wsp-input" min="2" max="6" value="3" />';
+		echo '<input type="number" id="wsp-country-analysis-k-classify" class="wsp-input" min="2" max="4" value="3" />';
+		echo '</div>';
 
+		echo '<div class="wsp-ca-control wsp-ca-control--narrow">';
+		echo '<label class="wsp-country-analytics__field" for="wsp-country-analysis-k-cluster">';
+		echo esc_html__( 'k — кластеры показателей', 'flavor-worldstat' );
+		echo '</label>';
+		echo '<input type="number" id="wsp-country-analysis-k-cluster" class="wsp-input" min="2" max="6" value="3" />';
+		echo '</div>';
+
+		echo '<div class="wsp-ca-control wsp-ca-control--theme">';
+		echo '<label class="wsp-country-analytics__field" for="wsp-country-analysis-cluster-cat">';
+		echo esc_html__( 'Тема для кластеризации', 'flavor-worldstat' );
+		echo '</label>';
+		echo '<select id="wsp-country-analysis-cluster-cat" class="wsp-select">';
+		foreach ( $cat_labels as $cid => $clabel ) {
+			printf( '<option value="%s">%s</option>', esc_attr( $cid ), esc_html( $clabel ) );
+		}
+		echo '</select>';
+		echo '</div>';
+
+		echo '<div class="wsp-ca-control wsp-ca-control--actions">';
 		echo '<button type="button" class="wsp-btn wsp-btn-primary" id="wsp-country-analysis-run">';
 		echo esc_html__( 'Рассчитать', 'flavor-worldstat' );
 		echo '</button>';
 		echo '<span class="wsp-country-analytics__status" id="wsp-country-analysis-status" aria-live="polite"></span>';
 		echo '</div>';
 
+		echo '</div>';
+
+		echo '<div class="wsp-country-analytics__cluster-pick">';
+		echo '<div class="wsp-country-analytics__cluster-pick-head">';
+		echo '<span class="wsp-country-analytics__field">' . esc_html__( 'Показатели для кластеризации', 'flavor-worldstat' ) . '</span>';
+		echo '<button type="button" class="wsp-btn-link" id="wsp-cluster-select-visible">' . esc_html__( 'Выбрать все', 'flavor-worldstat' ) . '</button>';
+		echo '<button type="button" class="wsp-btn-link" id="wsp-cluster-clear-visible">' . esc_html__( 'Снять все', 'flavor-worldstat' ) . '</button>';
+		echo '</div>';
+		echo '<div class="wsp-ca-metric-picks" id="wsp-cluster-metric-picks">';
+		foreach ( $chartable as $item ) {
+			$mid  = (string) ( $item['metric_id'] ?? $item['slug'] ?? '' );
+			$slug = sanitize_key( (string) ( $item['slug'] ?? '' ) );
+			$cat  = WorldStat_Data::metric_category_from_slug( $slug );
+			printf(
+				'<label class="wsp-ca-metric-pick" data-category="%s">'
+				. '<input type="checkbox" name="cluster_metrics[]" value="%s" /> '
+				. '<span>%s</span></label>',
+				esc_attr( $cat ),
+				esc_attr( $mid ),
+				esc_html( (string) ( $item['label'] ?? $mid ) )
+			);
+		}
+		echo '</div>';
+		echo '</div>';
+
 		echo '<div class="wsp-country-analytics__results" id="wsp-country-analysis-results">';
-		echo '<p class="wsp-muted">' . esc_html__( 'Загрузка…', 'flavor-worldstat' ) . '</p>';
+		echo '<p class="wsp-muted">' . esc_html__( 'Выберите параметры и нажмите «Рассчитать». Анализ не запускается автоматически.', 'flavor-worldstat' ) . '</p>';
 		echo '</div>';
 		echo '</section>';
 	}
@@ -109,10 +158,23 @@ class WorldStat_Country_Analysis {
 		}
 
 		$grid_items = $data->get_country_grid_items( $post_id );
-		$metric_id  = sanitize_text_field( (string) ( $_POST['metric_id'] ?? '' ) );
-		$k          = max( 2, min( 6, (int) ( $_POST['k'] ?? 3 ) ) );
 
-		$result = WorldStat_Country_ML::analyze( $grid_items, $metric_id, $k );
+		$cluster_ids = [];
+		if ( isset( $_POST['cluster_metrics'] ) && is_array( $_POST['cluster_metrics'] ) ) {
+			$cluster_ids = array_map( 'sanitize_text_field', wp_unslash( $_POST['cluster_metrics'] ) );
+		}
+
+		$result = WorldStat_Country_ML::analyze(
+			$grid_items,
+			[
+				'metric_id'          => sanitize_text_field( (string) ( $_POST['metric_id'] ?? '' ) ),
+				'k_cluster'          => (int) ( $_POST['k_cluster'] ?? 3 ),
+				'k_classify'         => (int) ( $_POST['k_classify'] ?? 3 ),
+				'cluster_category'   => sanitize_key( (string) ( $_POST['cluster_category'] ?? 'all' ) ),
+				'cluster_metric_ids' => $cluster_ids,
+			]
+		);
+
 		if ( empty( $result['ok'] ) ) {
 			wp_send_json_error( [ 'message' => (string) ( $result['error'] ?? __( 'Анализ недоступен.', 'flavor-worldstat' ) ) ] );
 		}
@@ -120,10 +182,7 @@ class WorldStat_Country_Analysis {
 		wp_send_json_success( $result );
 	}
 
-	/**
-	 * @param list<array<string,mixed>> $chartable
-	 */
-	private static function enqueue_assets( int $post_id, array $chartable ): void {
+	private static function enqueue_assets( int $post_id ): void {
 		WorldStat_UI::enqueue_chart_scripts();
 
 		wp_enqueue_style(
@@ -148,17 +207,22 @@ class WorldStat_Country_Analysis {
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( 'wp_rest' ),
 				'postId'  => $post_id,
-				'autoRun' => true,
+				'autoRun' => false,
 				'i18n'    => [
-					'running'  => __( 'Расчёт…', 'flavor-worldstat' ),
-					'error'    => __( 'Ошибка', 'flavor-worldstat' ),
-					'done'     => __( 'Готово', 'flavor-worldstat' ),
-					'r2'       => __( 'R²', 'flavor-worldstat' ),
-					'trend'    => __( 'Тренд', 'flavor-worldstat' ),
-					'forecast' => __( 'Прогноз', 'flavor-worldstat' ),
-					'year'     => __( 'год', 'flavor-worldstat' ),
-					'metrics'  => __( 'Показатели', 'flavor-worldstat' ),
-					'years'    => __( 'Годы', 'flavor-worldstat' ),
+					'running'       => __( 'Расчёт…', 'flavor-worldstat' ),
+					'error'         => __( 'Ошибка', 'flavor-worldstat' ),
+					'done'          => __( 'Готово', 'flavor-worldstat' ),
+					'pickMetric'    => __( 'Выберите показатель.', 'flavor-worldstat' ),
+					'pickCluster'   => __( 'Отметьте хотя бы один показатель для кластеризации.', 'flavor-worldstat' ),
+					'pickEither'    => __( 'Выберите показатель и/или отметьте показатели для кластеризации.', 'flavor-worldstat' ),
+					'r2'            => __( 'R²', 'flavor-worldstat' ),
+					'trend'         => __( 'Тренд', 'flavor-worldstat' ),
+					'forecast'      => __( 'Прогноз', 'flavor-worldstat' ),
+					'year'          => __( 'год', 'flavor-worldstat' ),
+					'value'         => __( 'Значение', 'flavor-worldstat' ),
+					'cluster'       => __( 'Кластер', 'flavor-worldstat' ),
+					'years'         => __( 'Год', 'flavor-worldstat' ),
+					'period'        => __( 'Уровень', 'flavor-worldstat' ),
 				],
 			]
 		);

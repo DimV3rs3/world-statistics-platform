@@ -1262,12 +1262,6 @@ class WorldStat_Data {
                             applyYear(String(select.value));
                         }
                     }
-
-                    var first = root.querySelector('.wsp-metric-item.is-chartable');
-                    if (first) {
-                        selectedId = first.getAttribute('data-metric-id');
-                        showChart(selectedId);
-                    }
                 });
             })();
         </script>

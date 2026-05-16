@@ -1,6 +1,6 @@
 <?php
 /**
- * ML для страницы страны: ряды показателей по годам (без generic CSV playground).
+ * ML для страницы страны: ряды показателей по годам.
  *
  * @package WorldStat
  */
@@ -14,11 +14,28 @@ class WorldStat_Country_ML {
 	private const CLUSTER_COLORS = [ '#3366cc', '#dc3912', '#ff9900', '#109618', '#990099', '#0099c6' ];
 
 	/**
+	 * @return array<string, string>
+	 */
+	public static function category_labels(): array {
+		return [
+			'all'            => __( 'Все темы', 'flavor-worldstat' ),
+			'population'     => __( 'Население', 'flavor-worldstat' ),
+			'health'         => __( 'Здоровье', 'flavor-worldstat' ),
+			'urban'          => __( 'Города', 'flavor-worldstat' ),
+			'territory'      => __( 'Территория и природа', 'flavor-worldstat' ),
+			'infrastructure' => __( 'Инфраструктура', 'flavor-worldstat' ),
+			'economy'        => __( 'Экономика', 'flavor-worldstat' ),
+			'governance'     => __( 'Управление', 'flavor-worldstat' ),
+			'other'          => __( 'Прочее', 'flavor-worldstat' ),
+		];
+	}
+
+	/**
 	 * @param list<array<string,mixed>> $grid_items
 	 * @return array<string,mixed>|null
 	 */
 	public static function prepare( array $grid_items ): ?array {
-		$metrics = [];
+		$metrics  = [];
 		$year_set = [];
 
 		foreach ( $grid_items as $item ) {
@@ -39,7 +56,7 @@ class WorldStat_Country_ML {
 				continue;
 			}
 			ksort( $series, SORT_NUMERIC );
-			$slug = sanitize_key( (string) ( $item['slug'] ?? '' ) );
+			$slug      = sanitize_key( (string) ( $item['slug'] ?? '' ) );
 			$metrics[] = [
 				'id'       => (string) ( $item['metric_id'] ?? $slug ),
 				'slug'     => $slug,
@@ -82,9 +99,10 @@ class WorldStat_Country_ML {
 
 	/**
 	 * @param list<array<string,mixed>> $grid_items
+	 * @param array<string,mixed>       $args metric_id, k_cluster, k_classify, cluster_category, cluster_metric_ids
 	 * @return array<string,mixed>
 	 */
-	public static function analyze( array $grid_items, string $metric_id, int $k ): array {
+	public static function analyze( array $grid_items, array $args ): array {
 		$prep = self::prepare( $grid_items );
 		if ( null === $prep ) {
 			return [
@@ -93,29 +111,110 @@ class WorldStat_Country_ML {
 			];
 		}
 
+		$metric_id = sanitize_text_field( (string) ( $args['metric_id'] ?? '' ) );
+
 		$metric = null;
-		foreach ( $prep['metrics'] as $m ) {
-			if ( $m['id'] === $metric_id || $m['slug'] === $metric_id ) {
-				$metric = $m;
-				break;
+		if ( $metric_id !== '' ) {
+			foreach ( $prep['metrics'] as $m ) {
+				if ( $m['id'] === $metric_id || $m['slug'] === $metric_id ) {
+					$metric = $m;
+					break;
+				}
+			}
+			if ( null === $metric ) {
+				return [
+					'ok'    => false,
+					'error' => __( 'Выбранный показатель не найден.', 'flavor-worldstat' ),
+				];
 			}
 		}
-		if ( null === $metric ) {
-			$metric = $prep['metrics'][0];
+
+		$k_cluster  = max( 2, min( 6, (int) ( $args['k_cluster'] ?? 3 ) ) );
+		$k_classify = max( 2, min( 4, (int) ( $args['k_classify'] ?? 3 ) ) );
+
+		$cluster_category = sanitize_key( (string) ( $args['cluster_category'] ?? 'all' ) );
+		$cluster_ids      = array_map( 'sanitize_text_field', (array) ( $args['cluster_metric_ids'] ?? [] ) );
+		$cluster_ids      = array_values( array_filter( $cluster_ids ) );
+
+		$cluster_metrics = self::filter_metrics( $prep['metrics'], $cluster_category, $cluster_ids );
+		$can_cluster     = count( $cluster_metrics ) >= $k_cluster;
+
+		if ( null === $metric && ! $can_cluster ) {
+			return [
+				'ok'    => false,
+				'error' => __( 'Выберите показатель и/или отметьте показатели для кластеризации.', 'flavor-worldstat' ),
+			];
 		}
 
-		$k = max( 2, min( 6, $k, count( $prep['metrics'] ) ) );
+		if ( ! empty( $cluster_ids ) && ! $can_cluster ) {
+			return [
+				'ok'    => false,
+				'error' => __( 'Для кластеризации выберите больше показателей (или смените тему).', 'flavor-worldstat' ),
+			];
+		}
+
+		$regression = [
+			'ok'      => false,
+			'message' => __( 'Выберите показатель в списке выше.', 'flavor-worldstat' ),
+		];
+		$classification = [
+			'ok'      => false,
+			'message' => __( 'Выберите показатель в списке выше.', 'flavor-worldstat' ),
+		];
+		$clustering = [
+			'ok'      => false,
+			'message' => __( 'Отметьте показатели для кластеризации.', 'flavor-worldstat' ),
+		];
+
+		if ( null !== $metric ) {
+			$regression     = self::regression_trend( $metric );
+			$classification = self::classify_years_by_metric( $metric, $k_classify );
+		}
+		if ( $can_cluster ) {
+			$clustering = self::cluster_metrics( $prep, $cluster_metrics, $k_cluster, $cluster_category );
+		}
 
 		return [
 			'ok'             => true,
 			'metric'         => $metric,
 			'metrics_count'  => count( $prep['metrics'] ),
+			'cluster_count'  => count( $cluster_metrics ),
 			'years_count'    => count( $prep['common_years'] ),
 			'year_range'     => self::year_range_label( $prep['common_years'] ),
-			'regression'     => self::regression_trend( $metric ),
-			'clustering'     => self::cluster_metrics( $prep, $k ),
-			'classification' => self::classify_years( $prep, $k ),
+			'regression'     => $regression,
+			'clustering'     => $clustering,
+			'classification' => $classification,
 		];
+	}
+
+	/**
+	 * @param list<array<string,mixed>> $metrics
+	 * @param list<string>              $ids
+	 * @return list<array<string,mixed>>
+	 */
+	private static function filter_metrics( array $metrics, string $category, array $ids ): array {
+		$out = $metrics;
+		if ( $category !== '' && $category !== 'all' ) {
+			$out = array_values(
+				array_filter(
+					$out,
+					static function ( $m ) use ( $category ) {
+						return ( $m['category'] ?? '' ) === $category;
+					}
+				)
+			);
+		}
+		if ( ! empty( $ids ) ) {
+			$out = array_values(
+				array_filter(
+					$out,
+					static function ( $m ) use ( $ids ) {
+						return in_array( $m['id'], $ids, true ) || in_array( $m['slug'], $ids, true );
+					}
+				)
+			);
+		}
+		return $out;
 	}
 
 	/**
@@ -145,13 +244,12 @@ class WorldStat_Country_ML {
 			return [ 'ok' => false, 'message' => __( 'Не удалось построить тренд.', 'flavor-worldstat' ) ];
 		}
 
-		$trend_labels = $years;
-		$trend_vals   = [];
+		$trend_vals = [];
 		foreach ( $years as $y ) {
 			$trend_vals[] = round( $fit['intercept'] + $fit['slope'] * (float) $y, 4 );
 		}
 
-		$last_year = (int) max( $years );
+		$last_year     = (int) max( $years );
 		$forecast_year = $last_year + 1;
 		$forecast_val  = $fit['intercept'] + $fit['slope'] * (float) $forecast_year;
 
@@ -169,10 +267,10 @@ class WorldStat_Country_ML {
 			'ok'          => true,
 			'title'       => sprintf(
 				/* translators: %s: metric label */
-				__( 'Тренд: %s', 'flavor-worldstat' ),
+				__( 'Регрессия: %s', 'flavor-worldstat' ),
 				$metric['label']
 			),
-			'description' => __( 'Линейная регрессия значения показателя по году (динамика во времени).', 'flavor-worldstat' ),
+			'description' => __( 'Линейный тренд выбранного показателя по годам.', 'flavor-worldstat' ),
 			'stats'       => [
 				'r2'        => round( $fit['r2'], 3 ),
 				'slope'     => round( $fit['slope'], 6 ),
@@ -205,17 +303,15 @@ class WorldStat_Country_ML {
 	}
 
 	/**
-	 * Кластеризация показателей по форме нормализованного ряда.
-	 *
-	 * @param array<string,mixed> $prep
-	 * @return array<string,mixed>
+	 * @param array<string,mixed>        $prep
+	 * @param list<array<string,mixed>>  $metrics_subset
 	 */
-	private static function cluster_metrics( array $prep, int $k ): array {
+	private static function cluster_metrics( array $prep, array $metrics_subset, int $k, string $category ): array {
 		$years   = $prep['common_years'];
 		$vectors = [];
 		$names   = [];
 
-		foreach ( $prep['metrics'] as $m ) {
+		foreach ( $metrics_subset as $m ) {
 			$raw = [];
 			$ok  = true;
 			foreach ( $years as $y ) {
@@ -240,13 +336,17 @@ class WorldStat_Country_ML {
 			];
 		}
 
-		$km     = self::kmeans( $vectors, $k, 50 );
+		$k     = max( 2, min( $k, $n ) );
+		$km    = self::kmeans( $vectors, $k, 50 );
 		$labels = $km['labels'];
 
 		$groups = array_fill( 0, $k, [] );
 		foreach ( $labels as $i => $lab ) {
 			$groups[ (int) $lab ][] = $names[ $i ];
 		}
+
+		$cat_labels = self::category_labels();
+		$scope      = $cat_labels[ $category ] ?? $cat_labels['all'];
 
 		$size_labels = [];
 		$size_data   = [];
@@ -282,7 +382,12 @@ class WorldStat_Country_ML {
 		return [
 			'ok'          => true,
 			'title'       => __( 'Кластеризация показателей', 'flavor-worldstat' ),
-			'description' => __( 'Группы показателей со схожей динамикой (z-нормировка по общим годам).', 'flavor-worldstat' ),
+			'description' => sprintf(
+				/* translators: 1: category scope, 2: number of metrics */
+				__( 'Группы показателей со схожей динамикой (%1$s, %2$d показателей).', 'flavor-worldstat' ),
+				$scope,
+				$n
+			),
 			'groups'      => $groups,
 			'charts'      => [
 				[
@@ -308,65 +413,53 @@ class WorldStat_Country_ML {
 	}
 
 	/**
-	 * Классификация лет на периоды по профилю всех показателей.
+	 * Классификация лет по уровню выбранного показателя.
 	 *
-	 * @param array<string,mixed> $prep
+	 * @param array<string,mixed> $metric
 	 * @return array<string,mixed>
 	 */
-	private static function classify_years( array $prep, int $k ): array {
-		$years   = $prep['common_years'];
-		$vectors = [];
-		$valid_years = [];
+	private static function classify_years_by_metric( array $metric, int $k ): array {
+		$series = $metric['series'];
+		$years  = array_keys( $series );
+		sort( $years, SORT_NUMERIC );
 
-		foreach ( $years as $y ) {
-			$raw = [];
-			foreach ( $prep['metrics'] as $m ) {
-				if ( isset( $m['series'][ $y ] ) ) {
-					$raw[] = (float) $m['series'][ $y ];
-				}
-			}
-			if ( count( $raw ) < 3 ) {
-				continue;
-			}
-			$vectors[]     = self::z_score_vector( $raw );
-			$valid_years[] = $y;
-		}
-
-		$n = count( $vectors );
-		if ( $n < 3 ) {
+		if ( count( $years ) < 3 ) {
 			return [
 				'ok'      => false,
-				'message' => __( 'Недостаточно лет с данными для классификации периодов.', 'flavor-worldstat' ),
+				'message' => __( 'Недостаточно лет с данными для классификации.', 'flavor-worldstat' ),
 			];
 		}
 
-		$k_eff = max( 2, min( 4, $k, $n ) );
-		$km    = self::kmeans( $vectors, $k_eff, 50 );
+		$vectors = [];
+		foreach ( $years as $y ) {
+			$vectors[] = [ (float) $series[ $y ] ];
+		}
+
+		$k_eff  = max( 2, min( 4, $k, count( $vectors ) ) );
+		$km     = self::kmeans( $vectors, $k_eff, 50 );
 		$labels = $km['labels'];
 
-		$cluster_score = array_fill( 0, $k_eff, 0.0 );
-		$cluster_count = array_fill( 0, $k_eff, 0 );
+		$cluster_mean = array_fill( 0, $k_eff, 0.0 );
+		$cluster_cnt  = array_fill( 0, $k_eff, 0 );
 		foreach ( $labels as $i => $lab ) {
 			$c = (int) $lab;
-			$cluster_score[ $c ] += array_sum( $vectors[ $i ] );
-			++$cluster_count[ $c ];
+			$cluster_mean[ $c ] += (float) $series[ $years[ $i ] ];
+			++$cluster_cnt[ $c ];
+		}
+		for ( $c = 0; $c < $k_eff; ++$c ) {
+			if ( $cluster_cnt[ $c ] > 0 ) {
+				$cluster_mean[ $c ] /= (float) $cluster_cnt[ $c ];
+			}
 		}
 
 		$order = range( 0, $k_eff - 1 );
-		usort(
-			$order,
-			static function ( $a, $b ) use ( $cluster_score, $cluster_count ) {
-				$sa = $cluster_count[ $a ] > 0 ? $cluster_score[ $a ] / $cluster_count[ $a ] : 0;
-				$sb = $cluster_count[ $b ] > 0 ? $cluster_score[ $b ] / $cluster_count[ $b ] : 0;
-				return $sa <=> $sb;
-			}
-		);
+		usort( $order, static fn( $a, $b ) => $cluster_mean[ $a ] <=> $cluster_mean[ $b ] );
 
 		$period_names = [
-			__( 'период с относительно низкими значениями', 'flavor-worldstat' ),
-			__( 'переходный период', 'flavor-worldstat' ),
-			__( 'период с относительно высокими значениями', 'flavor-worldstat' ),
-			__( 'период повышенной волатильности', 'flavor-worldstat' ),
+			__( 'низкий уровень', 'flavor-worldstat' ),
+			__( 'средний уровень', 'flavor-worldstat' ),
+			__( 'высокий уровень', 'flavor-worldstat' ),
+			__( 'очень высокий уровень', 'flavor-worldstat' ),
 		];
 
 		$rank_to_name = [];
@@ -374,38 +467,65 @@ class WorldStat_Country_ML {
 			$rank_to_name[ $cluster_id ] = $period_names[ min( $rank, count( $period_names ) - 1 ) ];
 		}
 
-		$timeline = [];
+		$timeline      = [];
 		$period_counts = array_fill( 0, $k_eff, 0 );
+		$bar_labels    = [];
+		$bar_data      = [];
+
 		foreach ( $labels as $i => $lab ) {
 			$c = (int) $lab;
 			++$period_counts[ $c ];
 			$timeline[] = [
-				'year'   => (int) $valid_years[ $i ],
-				'period' => $rank_to_name[ $c ] ?? ( __( 'период', 'flavor-worldstat' ) . ' ' . ( $c + 1 ) ),
+				'year'    => (int) $years[ $i ],
+				'value'   => round( (float) $series[ $years[ $i ] ], 2 ),
+				'period'  => $rank_to_name[ $c ] ?? ( __( 'уровень', 'flavor-worldstat' ) . ' ' . ( $c + 1 ) ),
 				'cluster' => $c + 1,
 			];
 		}
 		usort( $timeline, static fn( $a, $b ) => $a['year'] <=> $b['year'] );
 
-		$bar_labels = [];
-		$bar_data   = [];
 		for ( $c = 0; $c < $k_eff; ++$c ) {
 			$bar_labels[] = $rank_to_name[ $c ] ?? ( 'C' . ( $c + 1 ) );
 			$bar_data[]   = $period_counts[ $c ];
 		}
 
+		$line_labels = array_map( 'strval', $years );
+		$line_data   = [];
+		foreach ( $years as $y ) {
+			$line_data[] = (float) $series[ $y ];
+		}
+
 		return [
 			'ok'          => true,
-			'title'       => __( 'Классификация периодов', 'flavor-worldstat' ),
-			'description' => __( 'Годы сгруппированы по схожему профилю показателей (k-means в пространстве z-оценок).', 'flavor-worldstat' ),
+			'title'       => sprintf(
+				/* translators: %s: metric label */
+				__( 'Классификация лет: %s', 'flavor-worldstat' ),
+				$metric['label']
+			),
+			'description' => __( 'Годы сгруппированы по уровню выбранного показателя (k-means по значению).', 'flavor-worldstat' ),
 			'timeline'    => $timeline,
 			'charts'      => [
 				[
+					'type'     => 'line',
+					'title'    => __( 'Динамика показателя', 'flavor-worldstat' ),
+					'labels'   => $line_labels,
+					'datasets' => [
+						[
+							'label' => $metric['label'],
+							'data'  => $line_data,
+							'color' => '#109618',
+						],
+					],
+					'x_label'  => __( 'Год', 'flavor-worldstat' ),
+					'y_label'  => $metric['label'],
+					'height'   => 260,
+				],
+				[
 					'type'     => 'bar',
-					'title'    => __( 'Длительность периодов', 'flavor-worldstat' ),
+					'title'    => __( 'Сколько лет в каждом уровне', 'flavor-worldstat' ),
 					'labels'   => $bar_labels,
 					'datasets' => [
-						[ 'label' => __( 'Лет', 'flavor-worldstat' ), 'data' => $bar_data, 'color' => '#109618' ],
+						[ 'label' => __( 'Лет', 'flavor-worldstat' ), 'data' => $bar_data, 'color' => '#3366cc' ],
 					],
 					'height'   => 240,
 				],
@@ -437,7 +557,7 @@ class WorldStat_Country_ML {
 		$slope     = ( $n * $sxy - $sx * $sy ) / $den;
 		$intercept = ( $sy - $slope * $sx ) / $n;
 
-		$my = $sy / $n;
+		$my     = $sy / $n;
 		$ss_tot = 0.0;
 		$ss_res = 0.0;
 		for ( $i = 0; $i < $n; ++$i ) {
@@ -500,7 +620,7 @@ class WorldStat_Country_ML {
 		$labels = array_fill( 0, $n, 0 );
 		for ( $iter = 0; $iter < $max_iter; ++$iter ) {
 			for ( $i = 0; $i < $n; ++$i ) {
-				$best     = 0;
+				$best      = 0;
 				$best_dist = INF;
 				for ( $c = 0; $c < $k; ++$c ) {
 					$dist = 0.0;
