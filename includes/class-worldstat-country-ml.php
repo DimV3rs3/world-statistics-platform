@@ -13,6 +13,9 @@ class WorldStat_Country_ML {
 	/** @var list<string> */
 	private const CLUSTER_COLORS = [ '#3366cc', '#dc3912', '#ff9900', '#109618', '#990099', '#0099c6' ];
 
+	/** Конечный год линейного прогноза для регрессии и последующей классификации. */
+	private const REGRESSION_FORECAST_END = 2050;
+
 	/**
 	 * @return array<string, string>
 	 */
@@ -167,8 +170,17 @@ class WorldStat_Country_ML {
 		];
 
 		if ( null !== $metric ) {
-			$regression     = self::regression_trend( $metric );
-			$classification = self::classify_years_by_metric( $metric, $k_classify );
+			$regression = self::regression_trend( $metric );
+			$metric_for_classify = $metric;
+			if ( ! empty( $regression['ok'] ) ) {
+				$metric_for_classify = array_merge(
+					$metric,
+					[
+						'series' => self::extend_series_to_forecast_year( $metric['series'], self::REGRESSION_FORECAST_END ),
+					]
+				);
+			}
+			$classification = self::classify_years_by_metric( $metric_for_classify, $k_classify );
 		}
 		if ( $can_cluster ) {
 			$clustering = self::cluster_metrics( $prep, $cluster_metrics, $k_cluster, $cluster_category );
@@ -244,14 +256,23 @@ class WorldStat_Country_ML {
 			return [ 'ok' => false, 'message' => __( 'Не удалось построить тренд.', 'flavor-worldstat' ) ];
 		}
 
-		$trend_vals = [];
-		foreach ( $years as $y ) {
-			$trend_vals[] = round( $fit['intercept'] + $fit['slope'] * (float) $y, 4 );
+		$last_year     = (int) max( $years );
+		$forecast_end  = self::REGRESSION_FORECAST_END;
+		$forecast_val  = $fit['intercept'] + $fit['slope'] * (float) $forecast_end;
+
+		$chart_years = $years;
+		if ( $last_year < $forecast_end ) {
+			for ( $y = $last_year + 1; $y <= $forecast_end; $y++ ) {
+				$chart_years[] = $y;
+			}
 		}
 
-		$last_year     = (int) max( $years );
-		$forecast_year = $last_year + 1;
-		$forecast_val  = $fit['intercept'] + $fit['slope'] * (float) $forecast_year;
+		$actual_vals = [];
+		$trend_vals  = [];
+		foreach ( $chart_years as $y ) {
+			$actual_vals[] = isset( $series[ $y ] ) ? (float) $series[ $y ] : null;
+			$trend_vals[]  = round( $fit['intercept'] + $fit['slope'] * (float) $y, 4 );
+		}
 
 		$direction = __( 'стабильно', 'flavor-worldstat' );
 		if ( abs( $fit['slope'] ) > 1e-9 ) {
@@ -276,17 +297,17 @@ class WorldStat_Country_ML {
 				'slope'     => round( $fit['slope'], 6 ),
 				'direction' => $direction,
 				'forecast'  => [
-					'year'  => $forecast_year,
+					'year'  => $forecast_end,
 					'value' => round( $forecast_val, 2 ),
 				],
 			],
 			'chart'       => [
 				'type'     => 'line',
-				'labels'   => array_map( 'strval', $years ),
+				'labels'   => array_map( 'strval', $chart_years ),
 				'datasets' => [
 					[
 						'label' => __( 'Факт', 'flavor-worldstat' ),
-						'data'  => $ys,
+						'data'  => $actual_vals,
 						'color' => '#3366cc',
 					],
 					[
@@ -502,7 +523,7 @@ class WorldStat_Country_ML {
 				__( 'Классификация лет: %s', 'flavor-worldstat' ),
 				$metric['label']
 			),
-			'description' => __( 'Годы сгруппированы по уровню выбранного показателя (k-means по значению).', 'flavor-worldstat' ),
+			'description' => __( 'Годы сгруппированы по уровню показателя (k-means); в ряд включён линейный прогноз до 2050 г.', 'flavor-worldstat' ),
 			'timeline'    => $timeline,
 			'charts'      => [
 				[
@@ -531,6 +552,40 @@ class WorldStat_Country_ML {
 				],
 			],
 		];
+	}
+
+	/**
+	 * Дополняет ряд линейным прогнозом до целевого года (включительно).
+	 *
+	 * @param array<int|float|string, float> $series
+	 * @return array<int, float>
+	 */
+	private static function extend_series_to_forecast_year( array $series, int $end_year ): array {
+		$years = array_keys( $series );
+		sort( $years, SORT_NUMERIC );
+
+		if ( count( $years ) < 4 ) {
+			return $series;
+		}
+
+		$xs = array_map( 'floatval', $years );
+		$ys = [];
+		foreach ( $years as $y ) {
+			$ys[] = (float) $series[ $y ];
+		}
+
+		$fit = self::linear_fit( $xs, $ys );
+		if ( null === $fit ) {
+			return $series;
+		}
+
+		$extended = $series;
+		$last     = (int) max( $years );
+		for ( $y = $last + 1; $y <= $end_year; $y++ ) {
+			$extended[ $y ] = round( $fit['intercept'] + $fit['slope'] * (float) $y, 4 );
+		}
+
+		return $extended;
 	}
 
 	/**

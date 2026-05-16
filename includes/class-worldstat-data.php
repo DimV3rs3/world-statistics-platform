@@ -490,6 +490,14 @@ class WorldStat_Data {
             }
         }
         $all_years = array_values( array_unique( array_map( 'intval', $all_years ) ) );
+        $all_years = array_values(
+            array_filter(
+                $all_years,
+                static function ( $y ) {
+                    return $y >= 2000 && $y <= 2020;
+                }
+            )
+        );
         rsort( $all_years, SORT_NUMERIC );
 
         $groups = self::group_grid_items_by_category( $grid_items );

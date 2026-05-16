@@ -145,13 +145,18 @@ foreach ( $countries as $c ) {
         if ( ! is_finite( $fv ) ) {
             continue;
         }
-        $rank[] = [
+        $row = [
             'iso2'  => $c['iso2'],
             'name'  => $c['title'],
             'flag'  => $c['flag'],
             'value' => $fv,
             'url'   => $c['url'],
         ];
+        if ( $use_ergo_bulk && class_exists( 'WSErgo_Tier_Classifier' ) && $fv > 0 ) {
+            $tier = WSErgo_Tier_Classifier::classify_index( $fv );
+            $row['ergo_tier'] = $tier['label'] ?? '';
+        }
+        $rank[] = $row;
         continue;
     }
     $v = WorldStat_Data::get( $ext_id, $c['iso2'], $metric_slug );
@@ -178,6 +183,7 @@ unset( $r );
 $minfo = $all_metrics[ $cur_metric ] ?? [];
 $mlabel = $minfo['label'] ?? $metric_slug;
 $munit = $minfo['unit'] ?? '';
+$show_ergo_tier_col = $use_ergo_bulk && class_exists( 'WSErgo_Tier_Classifier' );
 $top5 = array_slice( $rank, 0, 5 );
 
 // Группировка
@@ -308,6 +314,9 @@ foreach ( $all_metrics as $k => $m ) {
                     <thead><tr>
                         <th style="width:80px;"><?php esc_html_e( 'Место', 'flavor-worldstat' ); ?></th>
                         <th><?php esc_html_e( 'Страна', 'flavor-worldstat' ); ?></th>
+                        <?php if ( $show_ergo_tier_col ) : ?>
+                        <th><?php esc_html_e( 'Группа E', 'flavor-worldstat' ); ?></th>
+                        <?php endif; ?>
                         <th style="text-align:right;"><?php esc_html_e( 'Значение', 'flavor-worldstat' ); ?></th>
                     </tr></thead>
                     <tbody>
@@ -315,6 +324,9 @@ foreach ( $all_metrics as $k => $m ) {
                             <tr>
                                 <td><span class="wsp-rank wsp-rank--<?php echo match($r['rank']){1=>'gold',2=>'silver',3=>'bronze',default=>'default'}; ?>"><?php echo match($r['rank']){1=>'🥇',2=>'🥈',3=>'🥉',default=>'#'.$r['rank']}; ?></span></td>
                                 <td><a href="<?php echo esc_url( $r['url'] ); ?>" style="text-decoration:none;display:flex;align-items:center;gap:10px;"><span style="font-size:20px;"><?php echo esc_html( $r['flag'] ); ?></span><span style="font-weight:600;color:#0f172a;"><?php echo esc_html( $r['name'] ); ?></span></a></td>
+                                <?php if ( $show_ergo_tier_col ) : ?>
+                                <td><span class="wsp-muted"><?php echo esc_html( (string) ( $r['ergo_tier'] ?? '—' ) ); ?></span></td>
+                                <?php endif; ?>
                                 <td style="text-align:right;font-family:monospace;font-weight:600;color:#2563eb;"><?php echo wsp_format_value( $r['value'] ); ?></td>
                             </tr>
                         <?php endforeach; ?>
