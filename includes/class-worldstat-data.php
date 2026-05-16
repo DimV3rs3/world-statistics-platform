@@ -344,6 +344,22 @@ class WorldStat_Data {
         /* These are defined once and delegate to the static API */
     }
 
+    /**
+     * Показатели страны для UI и аналитики (CSV / meta).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function get_country_grid_items( int $post_id ): array {
+        if ( $post_id < 1 ) {
+            return [];
+        }
+        $iso3 = strtoupper( (string) get_post_meta( $post_id, 'wsp_iso_alpha3', true ) );
+        if ( strlen( $iso3 ) !== 3 ) {
+            return [];
+        }
+        return $this->build_country_grid_items( $iso3, $post_id );
+    }
+
     public static function country_has_indicators( int $post_id ): bool {
         if ( $post_id < 1 ) {
             return false;
@@ -528,6 +544,9 @@ class WorldStat_Data {
 
         echo '</div></div></div>';
         $this->render_metrics_chart_panel();
+        if ( class_exists( 'WorldStat_Country_Analysis' ) ) {
+            WorldStat_Country_Analysis::render_panel( $post_id, $grid_items );
+        }
         echo '</div></section>';
         $this->render_country_csv_styles();
         $this->render_country_metrics_interaction_script( $grid_items );

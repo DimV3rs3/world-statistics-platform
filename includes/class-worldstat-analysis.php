@@ -70,39 +70,61 @@ class WorldStat_Data_Analysis {
      */
     public function run( array $args ): string {
         $parsed = $this->parse_csv( $args['csv'], $args['delimiter'], (bool) $args['has_header'] );
-        $columns = $parsed['columns'];
-        $rows = $parsed['rows'];
 
-        $rows = array_slice( $rows, 0, 400 ); // hard limit for performance
-        $n = count( $rows );
+        return $this->run_from_table( $parsed['rows'], $parsed['columns'], $args );
+    }
+
+    /**
+     * Run analysis on a pre-built table (rows keyed by column name).
+     *
+     * @param list<array<string, scalar>> $rows
+     * @param list<string>                $columns
+     * @param array<string, mixed>        $args target_column, regression_target_column?, k, eps, minpts, intro_html?
+     */
+    public function run_from_table( array $rows, array $columns, array $args ): string {
+        $rows = array_slice( $rows, 0, 400 );
+        $n    = count( $rows );
         if ( $n < 10 ) {
             return '<div class="wsp-notice wsp-notice-error"><p>Недостаточно строк для анализа. Нужно хотя бы 10 строк.</p></div>';
         }
 
-        $target_column = $args['target_column'];
-        $has_target = $target_column !== '' && in_array( $target_column, $columns, true );
+        $target_column            = (string) ( $args['target_column'] ?? '' );
+        $regression_target_column = (string) ( $args['regression_target_column'] ?? $target_column );
+        $has_target               = $target_column !== '' && in_array( $target_column, $columns, true );
+        $has_reg_target           = $regression_target_column !== '' && in_array( $regression_target_column, $columns, true );
 
-        // Numeric columns for features (excluding target).
         $numeric_cols = $this->detect_numeric_columns( $rows, $columns );
 
-        $feature_cols = $numeric_cols;
+        $exclude = [];
         if ( $has_target ) {
-            $feature_cols = array_values( array_diff( $feature_cols, [ $target_column ] ) );
+            $exclude[] = $target_column;
+        }
+        if ( $has_reg_target ) {
+            $exclude[] = $regression_target_column;
+        }
+        $exclude[] = '_target_class';
+
+        $feature_cols = $numeric_cols;
+        if ( ! empty( $exclude ) ) {
+            $feature_cols = array_values( array_diff( $feature_cols, $exclude ) );
         }
 
-        $feature_cols = array_values( array_slice( $feature_cols, 0, 12 ) ); // limit
+        $feature_cols = array_values( array_slice( $feature_cols, 0, 12 ) );
 
         if ( count( $feature_cols ) === 0 ) {
-            return '<div class="wsp-notice wsp-notice-error"><p>Не удалось найти числовые признаки для анализа. Убедитесь, что ваши колонки содержат числа.</p></div>';
+            return '<div class="wsp-notice wsp-notice-error"><p>Не удалось найти числовые признаки для анализа.</p></div>';
         }
 
-        // Build datasets for classification/regression (if target exists).
         [$X_raw, $X_all_cols, $y_class, $y_reg] = $this->build_xy_datasets(
             $rows,
             $feature_cols,
             $has_target ? $target_column : '',
             $has_target
         );
+
+        if ( $has_reg_target && $regression_target_column !== $target_column ) {
+            $y_reg = $this->build_regression_dataset( $rows, $feature_cols, $regression_target_column );
+        }
 
         // Clustering dataset uses all numeric feature cols.
         $X_cluster_raw = $this->build_X_only( $rows, $feature_cols );
@@ -119,10 +141,16 @@ class WorldStat_Data_Analysis {
         $out .= '<div class="wsp-analysis-meta">';
         $out .= '<p class="wsp-muted"><strong>Данные:</strong> ' . esc_html( $n ) . ' строк, ' . esc_html( count( $columns ) ) . ' колонок.</p>';
         $out .= '<p class="wsp-muted"><strong>Признаки:</strong> ' . esc_html( implode( ', ', $feature_cols ) ) . '</p>';
+        if ( ! empty( $args['intro_html'] ) ) {
+            $out .= (string) $args['intro_html'];
+        }
         if ( $has_target ) {
-            $out .= '<p class="wsp-muted"><strong>Целевая колонка:</strong> ' . esc_html( $target_column ) . '</p>';
+            $out .= '<p class="wsp-muted"><strong>Целевая колонка (классификация):</strong> ' . esc_html( $target_column ) . '</p>';
         } else {
             $out .= '<p class="wsp-muted"><strong>Целевая колонка:</strong> не выбрана (только кластеризация).</p>';
+        }
+        if ( $has_reg_target && $regression_target_column !== $target_column ) {
+            $out .= '<p class="wsp-muted"><strong>Целевая колонка (регрессия):</strong> ' . esc_html( $regression_target_column ) . '</p>';
         }
         $out .= '</div>';
 
@@ -192,6 +220,43 @@ class WorldStat_Data_Analysis {
         $out .= '</div>';
 
         return $out;
+    }
+
+    /**
+     * Regression dataset for a numeric target column.
+     *
+     * @param list<array<string, scalar>> $rows
+     * @param list<string>                $feature_cols
+     */
+    private function build_regression_dataset( array $rows, array $feature_cols, string $target_col ): array {
+        $X_reg = [];
+        $y_reg = [];
+        foreach ( $rows as $row ) {
+            $x  = [];
+            $ok = true;
+            foreach ( $feature_cols as $c ) {
+                $f = $this->to_float( (string) ( $row[ $c ] ?? '' ) );
+                if ( null === $f ) {
+                    $ok = false;
+                    break;
+                }
+                $x[] = $f;
+            }
+            if ( ! $ok ) {
+                continue;
+            }
+            $yf = $this->to_float( (string) ( $row[ $target_col ] ?? '' ) );
+            if ( null === $yf ) {
+                continue;
+            }
+            $X_reg[] = $x;
+            $y_reg[] = $yf;
+        }
+        return [
+            'available' => count( $y_reg ) >= 10,
+            'y'         => $y_reg,
+            'X'         => $X_reg,
+        ];
     }
 
     /* ─────────────────────────────────────────────────────────────

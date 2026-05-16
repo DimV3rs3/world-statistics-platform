@@ -55,6 +55,8 @@ $wsp_includes = [
     'includes/class-worldstat-extensions.php',
     'includes/class-worldstat-data.php',
     'includes/class-worldstat-analysis.php',
+    'includes/class-worldstat-country-ml.php',
+    'includes/class-worldstat-country-analysis.php',
     'includes/class-worldstat-platform-years.php',
     'includes/class-worldstat-ui.php',
     'includes/class-worldstat-country-cpt.php',

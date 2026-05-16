@@ -1,0 +1,139 @@
+/* Country page — ML analytics block */
+
+.wsp-country-analytics {
+	margin-top: 20px;
+	padding-top: 20px;
+	border-top: 1px solid var(--wsp-gray-200, #e5e7eb);
+}
+
+.wsp-country-analytics__title {
+	margin: 0 0 6px;
+	font-size: 1.15rem;
+}
+
+.wsp-country-analytics__desc,
+.wsp-country-analytics__meta {
+	margin: 0 0 8px;
+	font-size: 14px;
+	line-height: 1.45;
+}
+
+.wsp-country-analytics__controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 12px 16px;
+	margin: 14px 0 16px;
+}
+
+.wsp-country-analytics__field {
+	display: block;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--wsp-gray-700, #374151);
+	margin-bottom: 4px;
+}
+
+.wsp-country-analytics__controls .wsp-select {
+	min-width: 240px;
+	max-width: 100%;
+}
+
+.wsp-country-analytics__controls .wsp-input {
+	width: 72px;
+}
+
+.wsp-country-analytics__status {
+	font-size: 13px;
+	color: var(--wsp-gray-600, #4b5563);
+}
+
+.wsp-country-analytics__results {
+	background: #fff;
+	border: 1px solid var(--wsp-gray-200, #e5e7eb);
+	border-radius: 12px;
+	padding: 16px 18px;
+}
+
+.wsp-ca-block {
+	margin-bottom: 22px;
+	padding-bottom: 18px;
+	border-bottom: 1px dashed var(--wsp-gray-200, #e5e7eb);
+}
+
+.wsp-ca-block:last-child {
+	margin-bottom: 0;
+	padding-bottom: 0;
+	border-bottom: none;
+}
+
+.wsp-ca-block__title {
+	margin: 0 0 6px;
+	font-size: 1rem;
+}
+
+.wsp-ca-block__desc {
+	margin: 0 0 12px;
+	font-size: 13px;
+	color: var(--wsp-gray-600, #4b5563);
+}
+
+.wsp-ca-stats {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px 18px;
+	margin: 0 0 12px;
+	font-size: 14px;
+}
+
+.wsp-ca-stats strong {
+	color: var(--wsp-gray-800, #1f2937);
+}
+
+.wsp-ca-groups {
+	margin: 12px 0 0;
+	padding-left: 1.2em;
+	font-size: 14px;
+}
+
+.wsp-ca-groups li {
+	margin-bottom: 8px;
+}
+
+.wsp-ca-timeline {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+	margin-top: 10px;
+}
+
+.wsp-ca-timeline th,
+.wsp-ca-timeline td {
+	padding: 6px 10px;
+	border-bottom: 1px solid var(--wsp-gray-200, #e5e7eb);
+	text-align: left;
+}
+
+.wsp-ca-timeline th {
+	font-weight: 600;
+	color: var(--wsp-gray-700, #374151);
+}
+
+.wsp-ca-chart {
+	margin-top: 12px;
+}
+
+.wsp-ca-notice {
+	padding: 10px 12px;
+	border-radius: 8px;
+	background: #fef3c7;
+	color: #92400e;
+	font-size: 13px;
+}
+
+@media (max-width: 640px) {
+	.wsp-country-analytics__controls .wsp-select {
+		width: 100%;
+		min-width: 0;
+	}
+}

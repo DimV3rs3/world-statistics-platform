@@ -38,6 +38,12 @@
                     pointHoverRadius: 5,
                 };
 
+                if (type === 'scatter') {
+                    dataset.showLine = false;
+                    dataset.pointRadius = 5;
+                    dataset.pointHoverRadius = 7;
+                }
+
                 if (config.type === 'area') {
                     dataset.fill = true;
                 }
@@ -78,8 +84,12 @@
                         display: !!config.yLabel,
                         text: config.yLabel || ''
                     },
-                    beginAtZero: true
+                    beginAtZero: type !== 'scatter'
                 };
+                if (type === 'scatter') {
+                    options.scales.x.type = 'linear';
+                    options.scales.y.type = 'linear';
+                }
             }
 
             // Destroy existing chart if re-rendering
