@@ -642,12 +642,7 @@ class WorldStat_Csv_Country_Meta_Importer {
 	}
 
 	public static function human_label_for_slug( string $slug ): string {
-		$slug = sanitize_key( $slug );
-		if ( $slug === '' ) {
-			return __( 'Показатель', 'flavor-worldstat' );
-		}
-		$readable = str_replace( array( '_', '-' ), ' ', $slug );
-		return $readable !== '' ? $readable : $slug;
+		return WorldStat_Data::resolve_metric_label( 'csv-country-meta', $slug, '' );
 	}
 
 	private static function format_number( float $value ): string {

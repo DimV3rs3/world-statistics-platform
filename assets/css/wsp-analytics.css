@@ -603,6 +603,197 @@
     flex: 1;
 }
 
+#wsp-dropdown-arrow.rotated {
+    transform: rotate(180deg);
+}
+
+.wsp-metric-check {
+    margin-left: auto;
+    color: #2563eb;
+    font-weight: 700;
+}
+
+/* ═══════════════════════════════════════════════════════
+   ПЕСОЧНИЦА ДАННЫХ
+   ═══════════════════════════════════════════════════════ */
+
+.wsp-panel-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.wsp-panel-label {
+    margin-bottom: 0;
+}
+
+.wsp-panel-scroll {
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.wsp-panel-scroll-countries {
+    padding: 4px;
+}
+
+.wsp-panel-scroll-metrics {
+    padding: 8px;
+}
+
+.wsp-panel-limits {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-left: 4px;
+}
+
+.wsp-panel-group-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    border-bottom: 1px solid #f1f5f9;
+    margin-bottom: 2px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+}
+
+.wsp-panel-group-header:hover {
+    background: #f8fafc;
+}
+
+.wsp-panel-group-arrow {
+    font-size: 10px;
+    transition: transform 0.2s;
+    width: 16px;
+    text-align: center;
+    margin-right: 4px;
+}
+
+.wsp-panel-group-arrow.rotated {
+    transform: rotate(90deg);
+}
+
+.wsp-panel-group-title {
+    font-weight: 700;
+    font-size: 12px;
+    color: #334155;
+    flex: 1;
+}
+
+.wsp-panel-group-metrics {
+    display: none;
+}
+
+.wsp-panel-group-metrics.open {
+    display: block;
+}
+
+.wsp-heatmap {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+}
+
+.wsp-heatmap th,
+.wsp-heatmap td {
+    padding: 10px 14px;
+    text-align: center;
+    font-size: 13px;
+}
+
+.wsp-heatmap th {
+    background: #f8fafc;
+    font-weight: 600;
+    color: #475569;
+    position: sticky;
+    top: 0;
+}
+
+.wsp-heatmap td {
+    border: 1px solid #e2e8f0;
+}
+
+.wsp-heatmap .cell {
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.wsp-heatmap .row-label {
+    text-align: left;
+    font-weight: 600;
+}
+
+.wsp-heatmap .col-header {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.wsp-bar-charts {
+    display: none;
+    margin-top: 20px;
+}
+
+.wsp-bar-chart {
+    margin-bottom: 20px;
+}
+
+.wsp-bar-chart__title {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 8px;
+    color: #0f172a;
+}
+
+.wsp-bar-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+    gap: 10px;
+}
+
+.wsp-bar-row__label {
+    width: 80px;
+    text-align: right;
+    font-size: 12px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.wsp-bar-row__bar-wrap {
+    flex: 1;
+    background: #f1f5f9;
+    border-radius: 4px;
+    height: 22px;
+    overflow: hidden;
+    position: relative;
+}
+
+.wsp-bar-row__bar {
+    height: 100%;
+    border-radius: 4px;
+    background: #3b82f6;
+    transition: width 0.3s;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    font-size: 11px;
+    color: #fff;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.wsp-bar-row__value {
+    width: 120px;
+    font-size: 11px;
+    color: #64748b;
+    flex-shrink: 0;
+}
+
 /* ─── Адаптивность ──────────────────────────────────── */
 @media (max-width: 768px) {
     .wsp-page__title {

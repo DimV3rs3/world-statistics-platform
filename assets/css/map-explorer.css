@@ -77,21 +77,18 @@
     background: #d4e6f1;
 }
 
-/* Тултип */
 .wsp-map-tooltip {
-    position: fixed;
+    position: fixed !important;
+    z-index: 99999 !important;
+    pointer-events: none;
     background: #1e293b;
     color: #fff;
-    padding: 8px 14px;
-    border-radius: 8px;
-    font-size: 13px;
-    pointer-events: none;
-    z-index: 1001;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
     white-space: nowrap;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     display: none;
-    line-height: 1.4;
-    transform: translate(12px, -100%);
 }
 
 .wsp-map-tooltip .tooltip-country {

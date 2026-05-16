@@ -342,3 +342,65 @@ document.addEventListener('click', function(e) {
         });
     });
 })();
+
+/* ═══════════════════════════════════════════════════════
+   ПЕСОЧНИЦА ДАННЫХ — лимиты и счётчики
+   ═══════════════════════════════════════════════════════ */
+(function() {
+    var countryCB = document.querySelectorAll('.wsp-cb-country');
+    var metricCB  = document.querySelectorAll('.wsp-cb-metric');
+    if (!countryCB.length && !metricCB.length) return;
+
+    var MAX_COUNTRIES = 5;
+    var MAX_METRICS = 10;
+
+    function updateCheckboxes() {
+        var checkedCountries = document.querySelectorAll('.wsp-cb-country:checked');
+        countryCB.forEach(function(cb) {
+            var disabled = checkedCountries.length >= MAX_COUNTRIES && !cb.checked;
+            cb.disabled = disabled;
+            var item = cb.closest('.wsp-metric-item');
+            if (item) {
+                item.style.opacity = disabled ? '0.5' : '';
+                item.classList.toggle('is-checked', cb.checked);
+            }
+        });
+
+        var checkedMetrics = document.querySelectorAll('.wsp-cb-metric:checked');
+        metricCB.forEach(function(cb) {
+            var disabled = checkedMetrics.length >= MAX_METRICS && !cb.checked;
+            cb.disabled = disabled;
+            var item = cb.closest('.wsp-metric-item');
+            if (item) {
+                item.style.opacity = disabled ? '0.5' : '';
+                item.classList.toggle('is-checked', cb.checked);
+            }
+        });
+
+        var cc = document.getElementById('panel-countries-count');
+        var mc = document.getElementById('panel-metrics-count');
+        if (cc) cc.textContent = checkedCountries.length + '/' + MAX_COUNTRIES;
+        if (mc) mc.textContent = checkedMetrics.length + '/' + MAX_METRICS;
+    }
+
+    countryCB.forEach(function(cb) { cb.addEventListener('change', updateCheckboxes); });
+    metricCB.forEach(function(cb)  { cb.addEventListener('change', updateCheckboxes); });
+    updateCheckboxes();
+})();
+
+window.wspResetAll = function() {
+    document.querySelectorAll('.wsp-cb-country, .wsp-cb-metric').forEach(function(cb) {
+        cb.checked = false;
+        cb.disabled = false;
+        var item = cb.closest('.wsp-metric-item');
+        if (item) {
+            item.style.opacity = '';
+            item.classList.remove('is-checked');
+        }
+    });
+
+    var cc = document.getElementById('panel-countries-count');
+    var mc = document.getElementById('panel-metrics-count');
+    if (cc) cc.textContent = '0/5';
+    if (mc) mc.textContent = '0/10';
+};

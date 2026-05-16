@@ -113,7 +113,103 @@ class WorldStat_Data {
                 'level'         => 'country',
             ];
         }
+        return self::apply_metric_label_translations( $metrics );
+    }
+
+    /**
+     * Русская подпись показателя: словарь «Переводы» (эргономика) или запасной humanize.
+     *
+     * @param string $ext_id       Идентификатор расширения (csv-country-meta, core, …).
+     * @param string $metric_slug  Технический ключ метрики.
+     * @param string $fallback_label Подпись из регистрации провайдера / CSV.
+     */
+    public static function resolve_metric_label( string $ext_id, string $metric_slug, string $fallback_label = '' ): string {
+        $slug     = sanitize_key( $metric_slug );
+        $fallback = trim( $fallback_label );
+
+        // Core и прочие расширения: не трогаем уже заданные подписи (в т.ч. русские из Meta).
+        if ( $ext_id !== 'csv-country-meta' ) {
+            if ( $fallback !== '' ) {
+                return $fallback;
+            }
+            if ( $slug === '' ) {
+                return __( 'Показатель', 'flavor-worldstat' );
+            }
+            return self::humanize_metric_label( $slug );
+        }
+
+        static $known_csv_labels = null;
+        if ( null === $known_csv_labels ) {
+            $known_csv_labels = [
+                'population_total'           => __( 'Население', 'flavor-worldstat' ),
+                'population_density_per_km2' => __( 'Плотность населения на км²', 'flavor-worldstat' ),
+                'surface_area_sqkm'          => __( 'Площадь территории, км²', 'flavor-worldstat' ),
+                'urban_share_percent'        => __( 'Доля городского населения, %', 'flavor-worldstat' ),
+                'urban_land_area_sqkm'       => __( 'Площадь урбанизированных территорий, км²', 'flavor-worldstat' ),
+                'largest_city_population'    => __( 'Население крупнейшего города', 'flavor-worldstat' ),
+                'forest_percentage'          => __( 'Леса (% от территории)', 'flavor-worldstat' ),
+                'railway_length'             => __( 'Железные дороги, км', 'flavor-worldstat' ),
+                'road_length'                => __( 'Дороги, км', 'flavor-worldstat' ),
+            ];
+        }
+
+        if ( $slug !== '' && isset( $known_csv_labels[ $slug ] ) ) {
+            return $known_csv_labels[ $slug ];
+        }
+
+        if ( $slug !== '' ) {
+            if ( class_exists( 'WSErgo_Country_Macro_Calculator' ) ) {
+                $translated = WSErgo_Country_Macro_Calculator::data_label_ru( $slug );
+                if ( is_string( $translated ) && $translated !== '' && $translated !== $slug ) {
+                    return $translated;
+                }
+            } elseif ( class_exists( 'WSErgo_Settings' ) ) {
+                $map = get_option( WSErgo_Settings::OPTION_DATA_LABELS_RU, [] );
+                if ( is_array( $map ) && ! empty( $map[ $slug ] ) ) {
+                    return (string) $map[ $slug ];
+                }
+            }
+        }
+
+        if ( $fallback !== '' ) {
+            return $fallback;
+        }
+
+        if ( $slug === '' ) {
+            return __( 'Показатель', 'flavor-worldstat' );
+        }
+
+        return self::humanize_metric_label( $slug );
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $metrics
+     * @return array<string, array<string, mixed>>
+     */
+    public static function apply_metric_label_translations( array $metrics ): array {
+        foreach ( $metrics as $key => &$m ) {
+            $ext_id      = (string) ( $m['extension'] ?? '' );
+            $metric_slug = (string) ( $m['metric'] ?? '' );
+            if ( $metric_slug === '' && str_contains( (string) $key, '.' ) ) {
+                $parts = explode( '.', (string) $key, 2 );
+                if ( $ext_id === '' ) {
+                    $ext_id = $parts[0];
+                }
+                $metric_slug = $parts[1] ?? '';
+            }
+            $m['label'] = self::resolve_metric_label(
+                $ext_id,
+                $metric_slug,
+                (string) ( $m['label'] ?? '' )
+            );
+        }
+        unset( $m );
         return $metrics;
+    }
+
+    public static function humanize_metric_label( string $label_or_slug ): string {
+        $label = str_replace( [ '_', '-' ], ' ', trim( $label_or_slug ) );
+        return $label !== '' ? ucwords( strtolower( $label ) ) : $label_or_slug;
     }
 
     public static function set_value_year_context( ?int $year ): void {
@@ -725,8 +821,7 @@ class WorldStat_Data {
      * Красивое название для метрики, если нет в маппинге.
      */
     private function humanize_label( string $label ): string {
-        $label = str_replace( [ '_', '-' ], ' ', trim( $label ) );
-        return ucwords( strtolower( $label ) );
+        return self::humanize_metric_label( $label );
     }
 
     /**
@@ -734,11 +829,7 @@ class WorldStat_Data {
      * или запасной humanize по подписи из файла.
      */
     private function resolve_country_csv_metric_label_ru( string $slug, string $csv_label ): string {
-        if ( class_exists( 'WSErgo_Country_Macro_Calculator' ) ) {
-            return WSErgo_Country_Macro_Calculator::data_label_ru( $slug );
-        }
-        $csv_label = trim( $csv_label );
-        return $this->humanize_label( $csv_label !== '' ? $csv_label : $slug );
+        return self::resolve_metric_label( 'csv-country-meta', $slug, trim( $csv_label ) );
     }
 
     /**

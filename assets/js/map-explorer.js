@@ -60,8 +60,9 @@
         if (!tip) return;
         tip.innerHTML = '<div class="tooltip-country">' + name + '</div>' + (val !== undefined ? '<div class="tooltip-value">' + formatVal(val) + '</div>' : '');
         tip.style.display = 'block';
-        tip.style.left = e.originalEvent.clientX + 'px';
-        tip.style.top = (e.originalEvent.clientY - 10) + 'px';
+        tip.style.left = e.originalEvent.pageX + 'px';
+        tip.style.top = e.originalEvent.pageY + 'px';
+        tip.style.zIndex = '9999';
     }
     function hideTip() { if (tip) tip.style.display = 'none'; }
 
@@ -113,6 +114,43 @@
         for(var i=0;i<extra.length;i++)geojson.features.push(extra[i]);
         return geojson;
     }
+
+    window.wspToggleMapDropdown = function() {
+        var dd = document.getElementById('wsp-metric-dropdown');
+        var arr = document.getElementById('wsp-dropdown-arrow');
+        if (dd) { dd.style.display = dd.style.display === 'block' ? 'none' : 'block'; }
+        if (arr) arr.classList.toggle('rotated', dd && dd.style.display === 'block');
+    };
+
+    window.wspToggleMapGroup = function(header) {
+        var body = header.nextElementSibling;
+        var isOpen = header.classList.contains('open');
+        document.querySelectorAll('#wsp-metric-dropdown .wsp-dropdown__group-header').forEach(function(h) {
+            h.classList.remove('open');
+            if (h.nextElementSibling) h.nextElementSibling.style.display = 'none';
+        });
+        if (!isOpen) { header.classList.add('open'); if (body) body.style.display = 'block'; }
+    };
+
+    window.wspSelectMapMetric = function(option) {
+        document.getElementById('wsp-metric-input').value = option.getAttribute('data-value');
+        document.getElementById('wsp-metric-selected-label').textContent = option.getAttribute('data-label');
+        document.getElementById('wsp-metric-dropdown').style.display = 'none';
+        var arr = document.getElementById('wsp-dropdown-arrow');
+        if (arr) arr.classList.remove('rotated');
+        var form = document.getElementById('wsp-map-form');
+        if (form) form.submit();
+    };
+
+    document.addEventListener('click', function(e) {
+        var trigger = document.getElementById('wsp-metric-dropdown-trigger');
+        var dropdown = document.getElementById('wsp-metric-dropdown');
+        var arrow = document.getElementById('wsp-dropdown-arrow');
+        if (trigger && dropdown && !trigger.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.style.display = 'none';
+            if (arrow) arrow.classList.remove('rotated');
+        }
+    });
 
     fetch(url)
         .then(function(r){return r.json();})
@@ -188,13 +226,6 @@
         .catch(function(e){ console.error('Map load error:', e); });
 })();
 
-function wspSwitchMetric(val) {
-    var url = new URL(window.location);
-    url.searchParams.delete('layer');
-    if (val) { url.searchParams.set('metric', val); }
-    else { url.searchParams.delete('metric'); }
-    window.location = url.toString();
-}
 function wspSwitchLayer(val) {
     var url = new URL(window.location);
     url.searchParams.delete('metric');
