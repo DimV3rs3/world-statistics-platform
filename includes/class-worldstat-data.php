@@ -344,33 +344,204 @@ class WorldStat_Data {
         /* These are defined once and delegate to the static API */
     }
 
+    public static function country_has_indicators( int $post_id ): bool {
+        if ( $post_id < 1 ) {
+            return false;
+        }
+        $iso3 = strtoupper( (string) get_post_meta( $post_id, 'wsp_iso_alpha3', true ) );
+        if ( strlen( $iso3 ) !== 3 ) {
+            return false;
+        }
+        $instance = worldstat_platform()->data ?? null;
+        if ( ! $instance instanceof self ) {
+            return false;
+        }
+        return ! empty( $instance->build_country_grid_items( $iso3, $post_id ) );
+    }
+
     /**
-     * Render CSV metrics block on single country page.
+     * Точное соответствие slug → категория (имена CSV-наборов и особые случаи).
+     *
+     * @return array<string, string>
      */
-    public function render_country_csv_block( int $post_id, string $iso2, array $meta ): void {
+    private static function metric_category_exact_slugs(): array {
+        return [
+            'demographics'     => 'population',
+            'urban_infra'      => 'infrastructure',
+            'environment'      => 'territory',
+            'health_comfort'   => 'health',
+            'governance_sdg'   => 'governance',
+            'energy'           => 'infrastructure',
+        ];
+    }
+
+    public static function metric_category_from_slug( string $slug ): string {
+        $slug = strtolower( $slug );
+
+        $exact = self::metric_category_exact_slugs();
+        if ( isset( $exact[ $slug ] ) ) {
+            return $exact[ $slug ];
+        }
+
+        if ( preg_match( '/health|life_exp|wash|alcohol|tobacco|infect|substance|burden|physician|hospital|maternal|vaccin|nutrition/', $slug ) ) {
+            return 'health';
+        }
+        if ( preg_match( '/population|pop_|birth|death|fertility|mortality|demograph|migration|dependency|age_/', $slug ) ) {
+            return 'population';
+        }
+        if ( preg_match( '/urban|city|metro|aggl|big_city/', $slug ) && ! str_contains( $slug, 'urban_infra' ) ) {
+            return 'urban';
+        }
+        if ( preg_match( '/environment|forest|surface|land|climate|co2|emission|water|agricult|agri|pm25|renewable|freshwater|protected|environ|pollut|biodivers|waste|species/', $slug ) ) {
+            return 'territory';
+        }
+        if ( preg_match( '/rail|road|transport|energy|electric|internet|broadband|mobile|server|infra|school|air_depart|air_pass|digital|phone|fuel|cooking|sanitation|drinking|access_|fixed_phone|secure_/', $slug ) ) {
+            return 'infrastructure';
+        }
+        if ( preg_match( '/governance|parliament|fiscal|transparency|sdg|military|women_|oda|debt_stress/', $slug ) ) {
+            return 'governance';
+        }
+        if ( preg_match( '/gdp|econom|trade|export|import|income|wage|unemploy|inflation|budget|tax|rent_|gni/', $slug ) ) {
+            return 'economy';
+        }
+
+        return 'other';
+    }
+
+    /**
+     * @return array<string, array{label:string, icon:string, items:array<int,array<string,mixed>>}>
+     */
+    public static function group_grid_items_by_category( array $grid_items ): array {
+        $defs = [
+            'population'     => [ 'label' => __( 'Население', 'flavor-worldstat' ), 'icon' => 'groups' ],
+            'health'         => [ 'label' => __( 'Здоровье', 'flavor-worldstat' ), 'icon' => 'heart' ],
+            'urban'          => [ 'label' => __( 'Города', 'flavor-worldstat' ), 'icon' => 'building' ],
+            'territory'      => [ 'label' => __( 'Территория и природа', 'flavor-worldstat' ), 'icon' => 'admin-site-alt3' ],
+            'infrastructure' => [ 'label' => __( 'Инфраструктура', 'flavor-worldstat' ), 'icon' => 'migrate' ],
+            'economy'        => [ 'label' => __( 'Экономика', 'flavor-worldstat' ), 'icon' => 'chart-line' ],
+            'governance'     => [ 'label' => __( 'Управление', 'flavor-worldstat' ), 'icon' => 'shield' ],
+            'other'          => [ 'label' => __( 'Прочее', 'flavor-worldstat' ), 'icon' => 'chart-bar' ],
+        ];
+
+        $groups = [];
+        foreach ( $defs as $id => $def ) {
+            $groups[ $id ] = [
+                'label' => $def['label'],
+                'icon'  => $def['icon'],
+                'items' => [],
+            ];
+        }
+
+        foreach ( $grid_items as $item ) {
+            $cat = self::metric_category_from_slug( (string) ( $item['slug'] ?? '' ) );
+            if ( ! isset( $groups[ $cat ] ) ) {
+                $cat = 'other';
+            }
+            $groups[ $cat ]['items'][] = $item;
+        }
+
+        $out = [
+            'all' => [
+                'label' => __( 'Все параметры', 'flavor-worldstat' ),
+                'icon'  => 'list-view',
+                'items' => $grid_items,
+            ],
+        ];
+        foreach ( $groups as $id => $group ) {
+            if ( ! empty( $group['items'] ) ) {
+                $out[ $id ] = $group;
+            }
+        }
+
+        return $out;
+    }
+
+    public function render_country_indicators_panel( int $post_id, string $iso2, array $meta ): void {
         $iso3 = strtoupper( (string) ( $meta['iso_alpha3'] ?? '' ) );
         if ( strlen( $iso3 ) !== 3 ) {
             return;
         }
 
-        $rows = $this->get_country_csv_rows( $iso3, $post_id );
-        if ( empty( $rows ) ) {
+        $grid_items = $this->build_country_grid_items( $iso3, $post_id );
+        if ( empty( $grid_items ) ) {
             return;
         }
 
         $all_years = [];
-        foreach ( $rows as $row ) {
-            if ( ! empty( $row['years'] ) && is_array( $row['years'] ) ) {
-                $all_years = array_merge( $all_years, array_keys( $row['years'] ) );
+        foreach ( $grid_items as $item ) {
+            if ( ! empty( $item['years_data'] ) && is_array( $item['years_data'] ) ) {
+                $all_years = array_merge( $all_years, array_keys( $item['years_data'] ) );
             }
         }
         $all_years = array_values( array_unique( array_map( 'intval', $all_years ) ) );
         rsort( $all_years, SORT_NUMERIC );
-        if ( empty( $all_years ) ) {
+
+        $groups = self::group_grid_items_by_category( $grid_items );
+        if ( empty( $groups ) ) {
             return;
         }
 
-        // PHP 8.3+: static-переменную нельзя инициализировать вызовами вроде __() — только «константные» выражения.
+        WorldStat_UI::enqueue_chart_scripts();
+
+        echo '<section class="wsp-country-indicators">';
+        echo '<div class="wsp-metrics-layout"><div class="wsp-metrics-main">';
+        echo '<div class="wsp-tabs wsp-tabs--nested" data-nested="1">';
+        echo '<div class="wsp-metrics-filters">';
+        echo '<nav class="wsp-tab-nav wsp-tab-nav--nested" role="tablist">';
+        $gi = 0;
+        foreach ( $groups as $cat_id => $group ) {
+            $active = $gi === 0 ? ' wsp-tab-active' : '';
+            printf(
+                '<button type="button" class="wsp-tab-btn%s" data-tab="cat-%s" role="tab" aria-selected="%s">'
+                . '<span class="dashicons dashicons-%s"></span> %s <span class="wsp-tab-count">%d</span></button>',
+                $active,
+                esc_attr( $cat_id ),
+                $gi === 0 ? 'true' : 'false',
+                esc_attr( $group['icon'] ),
+                esc_html( $group['label'] ),
+                count( $group['items'] )
+            );
+            ++$gi;
+        }
+        echo '</nav>';
+        if ( ! empty( $all_years ) ) {
+            echo '<div class="wsp-csv-year-selector">';
+            echo '<label for="global-csv-year">' . esc_html__( 'Год данных', 'flavor-worldstat' ) . '</label>';
+            echo '<select id="global-csv-year" class="wsp-select">';
+            foreach ( $all_years as $y ) {
+                echo '<option value="' . esc_attr( (string) $y ) . '">' . esc_html( (string) $y ) . '</option>';
+            }
+            echo '</select></div>';
+        }
+        echo '</div>';
+        echo '<div class="wsp-tab-panels">';
+
+
+        $gi = 0;
+        foreach ( $groups as $cat_id => $group ) {
+            $active_panel = $gi === 0 ? ' wsp-tab-panel-active' : '';
+            printf( '<div class="wsp-tab-panel%s" data-tab="cat-%s">', $active_panel, esc_attr( $cat_id ) );
+            $this->render_metrics_list( $group['items'], $cat_id );
+            echo '</div>';
+            ++$gi;
+        }
+
+        echo '</div></div></div>';
+        $this->render_metrics_chart_panel();
+        echo '</div></section>';
+        $this->render_country_csv_styles();
+        $this->render_country_metrics_interaction_script( $grid_items );
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function build_country_grid_items( string $iso3, int $post_id ): array {
+        $rows = $this->get_country_csv_rows( $iso3, $post_id );
+        if ( empty( $rows ) ) {
+            return [];
+        }
+
         static $metric_icons = null;
         if ( null === $metric_icons ) {
             $metric_icons = [
@@ -402,6 +573,7 @@ class WorldStat_Data {
                 'icon'  => 'chart-bar',
             ];
             $grid_items[] = [
+                'slug'       => $slug,
                 'label'      => $nice['label'],
                 'value'      => $this->format_csv_value( (float) $row['value'] ),
                 'icon'       => $nice['icon'],
@@ -409,27 +581,66 @@ class WorldStat_Data {
                 'metric_id'  => 'csv-metric-' . $index,
             ];
         }
-        if ( empty( $grid_items ) ) {
-            return;
-        }
 
-        echo '<section class="wsp-country-csv-block">';
-        echo '<div class="wsp-csv-year-header">';
-        echo '<h3>' . esc_html__( 'Данные из загруженных CSV', 'flavor-worldstat' ) . '</h3>';
-        echo '<div class="wsp-csv-year-selector">';
-        echo '<label for="global-csv-year">' . esc_html__( 'Год:', 'flavor-worldstat' ) . '</label>';
-        echo '<select id="global-csv-year" class="wsp-select">';
-        foreach ( $all_years as $y ) {
-            echo '<option value="' . esc_attr( (string) $y ) . '">' . esc_html( (string) $y ) . '</option>';
+        return $grid_items;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $items
+     */
+    private function render_metrics_list( array $items, string $cat_id = '' ): void {
+        $scrollable = count( $items ) > 8;
+        $wrap_class = 'wsp-metric-list-wrap' . ( $scrollable ? ' is-scrollable' : '' );
+        $list_class = 'wsp-metric-list' . ( 'all' === $cat_id ? ' wsp-metric-list--grid' : '' );
+        echo '<div class="' . esc_attr( $wrap_class ) . '"><ul class="' . esc_attr( $list_class ) . '" role="list">';
+        foreach ( $items as $item ) {
+            $mid       = (string) ( $item['metric_id'] ?? '' );
+            $years     = isset( $item['years_data'] ) && is_array( $item['years_data'] ) ? $item['years_data'] : [];
+            $chartable = count( $years ) >= 2;
+            $icon      = (string) ( $item['icon'] ?? 'chart-bar' );
+            $classes   = 'wsp-metric-item' . ( $chartable ? ' is-chartable' : '' );
+            printf(
+                '<li class="%s" data-metric-id="%s" data-chartable="%s" tabindex="%s" role="button" aria-pressed="false">',
+                esc_attr( $classes ),
+                esc_attr( $mid ),
+                $chartable ? '1' : '0',
+                $chartable ? '0' : '-1'
+            );
+            echo '<span class="wsp-metric-item__icon dashicons dashicons-' . esc_attr( $icon ) . '"></span>';
+            echo '<span class="wsp-metric-item__body">';
+            echo '<span class="wsp-metric-item__label">' . esc_html( (string) ( $item['label'] ?? '' ) ) . '</span>';
+            if ( $chartable ) {
+                echo '<span class="wsp-metric-item__hint">' . esc_html__( 'График по годам', 'flavor-worldstat' ) . '</span>';
+            }
+            echo '</span>';
+            echo '<span class="wsp-metric-item__value wsp-metric-value">' . esc_html( (string) ( $item['value'] ?? '' ) ) . '</span>';
+            echo '</li>';
         }
-        echo '</select>';
-        echo '</div>';
-        echo '</div>';
-        WorldStat_UI::stats_grid( $grid_items, [ 'columns' => 4 ] );
-        $this->render_country_csv_charts( $grid_items );
-        echo '</section>';
-        $this->render_country_csv_styles();
-        $this->render_global_year_script( $grid_items );
+        echo '</ul></div>';
+    }
+
+    private function render_metrics_chart_panel(): void {
+        ?>
+        <aside class="wsp-metrics-chart" aria-live="polite">
+            <div class="wsp-metrics-chart__head">
+                <h4 class="wsp-metrics-chart__title" id="wsp-chart-title"><?php esc_html_e( 'Динамика', 'flavor-worldstat' ); ?></h4>
+            </div>
+            <div class="wsp-metrics-chart__body">
+                <p class="wsp-metrics-chart__placeholder"><?php esc_html_e( 'Выберите показатель с подписью «График по годам»', 'flavor-worldstat' ); ?></p>
+                <p class="wsp-metrics-chart__nodata" hidden><?php esc_html_e( 'Для этого показателя недостаточно данных по годам', 'flavor-worldstat' ); ?></p>
+                <div class="wsp-metrics-chart__canvas-wrap" hidden>
+                    <canvas id="wsp-metric-detail-chart" aria-labelledby="wsp-chart-title"></canvas>
+                </div>
+            </div>
+        </aside>
+        <?php
+    }
+
+    /**
+     * Render CSV metrics block on single country page.
+     */
+    public function render_country_csv_block( int $post_id, string $iso2, array $meta ): void {
+        $this->render_country_indicators_panel( $post_id, $iso2, $meta );
     }
 
     /**
@@ -833,25 +1044,27 @@ class WorldStat_Data {
     }
 
     /**
-     * JS для общего выбора года на странице страны.
+     * Год, клик по показателю и график динамики.
      *
      * @param array<int,array<string,mixed>> $grid_items
      */
-    private function render_global_year_script( array $grid_items ): void {
+    private function render_country_metrics_interaction_script( array $grid_items ): void {
+        $year_label = esc_js( __( 'Год', 'flavor-worldstat' ) );
         ?>
         <script>
             (function() {
-                if (window.wspCsvGlobalSelectorBound) {
+                if (window.wspCountryMetricsBound) {
                     return;
                 }
-                window.wspCsvGlobalSelectorBound = true;
+                window.wspCountryMetricsBound = true;
                 document.addEventListener('DOMContentLoaded', function () {
-                    var select = document.getElementById('global-csv-year');
-                    if (!select) {
+                    var root = document.querySelector('.wsp-country-indicators');
+                    if (!root) {
                         return;
                     }
 
                     var dataMap = {};
+                    var labelMap = {};
                     <?php foreach ( $grid_items as $item ) : ?>
                         <?php
                         $mid = (string) ( $item['metric_id'] ?? '' );
@@ -874,7 +1087,12 @@ class WorldStat_Data {
                         }
                         ?>
                         dataMap['<?php echo esc_js( $mid ); ?>'] = <?php echo $yd_json; ?>;
+                        labelMap['<?php echo esc_js( $mid ); ?>'] = <?php echo wp_json_encode( (string) ( $item['label'] ?? '' ), JSON_UNESCAPED_UNICODE ); ?>;
                     <?php endforeach; ?>
+
+                    var selectedId = null;
+                    var canvasId = 'wsp-metric-detail-chart';
+                    var select = document.getElementById('global-csv-year');
 
                     function formatNumber(value) {
                         var raw = Number(value);
@@ -886,9 +1104,98 @@ class WorldStat_Data {
                             : raw.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
 
+                    function seriesForChart(metricId) {
+                        var raw = dataMap[metricId];
+                        if (!raw) {
+                            return null;
+                        }
+                        var keys = Object.keys(raw).sort(function (a, b) {
+                            return Number(a) - Number(b);
+                        });
+                        if (keys.length < 2) {
+                            return null;
+                        }
+                        return {
+                            labels: keys,
+                            data: keys.map(function (k) { return raw[k]; })
+                        };
+                    }
+
+                    function showChart(metricId) {
+                        var titleEl = document.getElementById('wsp-chart-title');
+                        var placeholder = root.querySelector('.wsp-metrics-chart__placeholder');
+                        var nodata = root.querySelector('.wsp-metrics-chart__nodata');
+                        var wrap = root.querySelector('.wsp-metrics-chart__canvas-wrap');
+                        var series = metricId ? seriesForChart(metricId) : null;
+
+                        root.querySelectorAll('.wsp-metric-item').forEach(function (el) {
+                            var active = el.getAttribute('data-metric-id') === metricId;
+                            el.classList.toggle('is-active', active);
+                            el.setAttribute('aria-pressed', active ? 'true' : 'false');
+                        });
+
+                        if (!metricId || !series) {
+                            if (wrap) {
+                                wrap.hidden = true;
+                            }
+                            if (placeholder) {
+                                placeholder.hidden = !!metricId;
+                            }
+                            if (nodata) {
+                                nodata.hidden = !metricId;
+                            }
+                            if (titleEl && metricId) {
+                                titleEl.textContent = labelMap[metricId] || <?php echo wp_json_encode( __( 'Динамика', 'flavor-worldstat' ), JSON_UNESCAPED_UNICODE ); ?>;
+                            }
+                            return;
+                        }
+
+                        if (placeholder) {
+                            placeholder.hidden = true;
+                        }
+                        if (nodata) {
+                            nodata.hidden = true;
+                        }
+                        if (wrap) {
+                            wrap.hidden = false;
+                        }
+                        if (titleEl) {
+                            titleEl.textContent = labelMap[metricId] || '';
+                        }
+
+                        function paint() {
+                            if (typeof Chart === 'undefined' || !window.WSPChart) {
+                                return false;
+                            }
+                            window.WSPChart.render(canvasId, {
+                                type: 'line',
+                                labels: series.labels,
+                                datasets: [{
+                                    label: labelMap[metricId] || '',
+                                    data: series.data,
+                                    color: '#2563eb'
+                                }],
+                                xLabel: '<?php echo $year_label; ?>',
+                                legend: false
+                            });
+                            return true;
+                        }
+
+                        var attempts = 0;
+                        (function tryPaint() {
+                            if (paint()) {
+                                return;
+                            }
+                            attempts++;
+                            if (attempts < 80) {
+                                setTimeout(tryPaint, 120);
+                            }
+                        })();
+                    }
+
                     function applyYear(year) {
-                        document.querySelectorAll('.wsp-country-csv-block .wsp-stat-card').forEach(function (card) {
-                            var metricId = card.getAttribute('data-metric-id');
+                        root.querySelectorAll('.wsp-metric-item[data-metric-id]').forEach(function (item) {
+                            var metricId = item.getAttribute('data-metric-id');
                             if (!metricId || !dataMap[metricId]) {
                                 return;
                             }
@@ -896,19 +1203,51 @@ class WorldStat_Data {
                             if (value === undefined) {
                                 return;
                             }
-                            var valueEl = card.querySelector('.wsp-stat-value');
+                            var valueEl = item.querySelector('.wsp-metric-value');
                             if (valueEl) {
                                 valueEl.textContent = formatNumber(value);
                             }
                         });
+                        if (selectedId) {
+                            showChart(selectedId);
+                        }
                     }
 
-                    select.addEventListener('change', function () {
-                        applyYear(String(select.value));
+                    root.addEventListener('click', function (e) {
+                        var item = e.target.closest('.wsp-metric-item.is-chartable');
+                        if (!item || !root.contains(item)) {
+                            return;
+                        }
+                        selectedId = item.getAttribute('data-metric-id');
+                        showChart(selectedId);
                     });
 
-                    if (select.value !== '') {
-                        applyYear(String(select.value));
+                    root.addEventListener('keydown', function (e) {
+                        if (e.key !== 'Enter' && e.key !== ' ') {
+                            return;
+                        }
+                        var item = e.target.closest('.wsp-metric-item.is-chartable');
+                        if (!item) {
+                            return;
+                        }
+                        e.preventDefault();
+                        selectedId = item.getAttribute('data-metric-id');
+                        showChart(selectedId);
+                    });
+
+                    if (select) {
+                        select.addEventListener('change', function () {
+                            applyYear(String(select.value));
+                        });
+                        if (select.value !== '') {
+                            applyYear(String(select.value));
+                        }
+                    }
+
+                    var first = root.querySelector('.wsp-metric-item.is-chartable');
+                    if (first) {
+                        selectedId = first.getAttribute('data-metric-id');
+                        showChart(selectedId);
                     }
                 });
             })();
@@ -922,20 +1261,48 @@ class WorldStat_Data {
     private function render_country_csv_styles(): void {
         ?>
         <style>
-            .wsp-country-csv-block .wsp-csv-year-header {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                margin-bottom: 20px;
-                flex-wrap: wrap;
-                gap: 12px;
+            .wsp-country-indicators {
+                margin-top: 16px;
+                padding-top: 16px;
+                border-top: 1px solid var(--wsp-gray-200, #e5e7eb);
             }
-            .wsp-country-csv-block .wsp-csv-year-selector {
+            .wsp-country-indicators .wsp-tabs--nested {
+                margin-bottom: 0;
+            }
+            .wsp-metrics-filters {
                 display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 10px 14px;
+                margin-bottom: 12px;
+            }
+            .wsp-metrics-filters .wsp-tab-nav--nested {
+                flex: 1 1 240px;
+                margin-bottom: 0;
+            }
+            .wsp-metrics-filters .wsp-csv-year-selector {
+                flex: 0 0 auto;
+                margin-left: auto;
+                white-space: nowrap;
+            }
+            .wsp-metrics-layout {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            }
+            .wsp-metrics-main {
+                width: 100%;
+            }
+            .wsp-country-indicators .wsp-csv-year-selector {
+                display: inline-flex;
                 align-items: center;
                 gap: 8px;
-                font-size: 15px;
+                font-size: 14px;
             }
+            .wsp-country-indicators .wsp-csv-year-selector .wsp-select {
+                min-width: 88px;
+            }
+            .wsp-country-indicators .wsp-select,
             .wsp-country-csv-block .wsp-select {
                 padding: 8px 14px;
                 border: 1px solid #d1d5db;
@@ -947,10 +1314,178 @@ class WorldStat_Data {
                 box-shadow: 0 1px 3px rgba(0,0,0,0.05);
                 transition: all 0.2s ease;
             }
+            .wsp-country-indicators .wsp-select:focus,
             .wsp-country-csv-block .wsp-select:focus {
                 outline: none;
                 border-color: #3b82f6;
                 box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+            }
+            .wsp-tabs--nested {
+                margin-top: 0;
+            }
+            .wsp-country-indicators .wsp-tab-nav--nested {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-bottom: 12px;
+                overflow: visible;
+                border-bottom: none;
+                scrollbar-width: none;
+            }
+            .wsp-country-indicators .wsp-metrics-filters .wsp-tab-nav--nested {
+                margin-bottom: 0;
+            }
+            .wsp-country-indicators .wsp-tab-nav--nested::-webkit-scrollbar {
+                display: none;
+                height: 0;
+            }
+            .wsp-country-indicators .wsp-tab-nav--nested .wsp-tab-btn {
+                padding: 8px 12px;
+                font-size: 13px;
+                margin-bottom: 0;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                background: #f9fafb;
+                overflow: visible;
+            }
+            .wsp-country-indicators .wsp-tab-nav--nested .wsp-tab-btn.wsp-tab-active {
+                background: #eff6ff;
+                border-color: #2563eb;
+                border-bottom-color: #2563eb;
+            }
+            .wsp-country-indicators .wsp-tab-panels {
+                margin-top: 0;
+            }
+            .wsp-country-indicators .wsp-tab-panel:not(.wsp-tab-panel-active) {
+                display: none !important;
+                height: 0;
+                overflow: hidden;
+                margin: 0;
+                padding: 0;
+            }
+            .wsp-metric-list-wrap.is-scrollable {
+                max-height: min(48vh, 480px);
+                overflow-y: auto;
+                overflow-x: hidden;
+                padding-right: 4px;
+                scrollbar-width: thin;
+            }
+            .wsp-metric-list--grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+                gap: 8px;
+            }
+            @media (min-width: 1100px) {
+                .wsp-metric-list--grid {
+                    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                }
+            }
+            .wsp-tab-count {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 20px;
+                height: 20px;
+                padding: 0 6px;
+                margin-left: 4px;
+                border-radius: 10px;
+                background: #e5e7eb;
+                color: #4b5563;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            .wsp-tab-btn.wsp-tab-active .wsp-tab-count {
+                background: rgba(37, 99, 235, 0.15);
+                color: #2563eb;
+            }
+            .wsp-metric-list {
+                list-style: none;
+                margin: 0;
+                padding: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            .wsp-metric-item {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 12px 14px;
+                background: #fff;
+                border: 1px solid #e5e7eb;
+                border-radius: 10px;
+                transition: border-color .2s, box-shadow .2s, background .2s;
+            }
+            .wsp-metric-item.is-chartable {
+                cursor: pointer;
+            }
+            .wsp-metric-item.is-chartable:hover {
+                border-color: #93c5fd;
+                box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+            }
+            .wsp-metric-item.is-active {
+                border-color: #2563eb;
+                background: #eff6ff;
+                box-shadow: 0 0 0 1px #2563eb;
+            }
+            .wsp-metric-item__icon {
+                flex-shrink: 0;
+                font-size: 22px;
+                width: 22px;
+                height: 22px;
+                color: #2563eb;
+            }
+            .wsp-metric-item__body {
+                flex: 1;
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+            .wsp-metric-item__label {
+                font-weight: 500;
+                color: #1f2937;
+                line-height: 1.35;
+            }
+            .wsp-metric-item__hint {
+                font-size: 12px;
+                color: #6b7280;
+            }
+            .wsp-metric-item__value {
+                flex-shrink: 0;
+                font-size: 1.05rem;
+                font-weight: 700;
+                font-variant-numeric: tabular-nums;
+                color: #111827;
+            }
+            .wsp-metrics-chart {
+                width: 100%;
+                background: #fff;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 14px 16px;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            }
+            .wsp-metrics-chart__title {
+                margin: 0 0 12px;
+                font-size: 1rem;
+                color: #111827;
+            }
+            .wsp-metrics-chart__placeholder,
+            .wsp-metrics-chart__nodata {
+                margin: 0;
+                font-size: 0.9rem;
+                color: #6b7280;
+                text-align: center;
+                padding: 12px;
+            }
+            .wsp-metrics-chart__canvas-wrap {
+                position: relative;
+                height: 220px;
+            }
+            .wsp-metrics-chart__canvas-wrap canvas {
+                width: 100% !important;
+                height: 100% !important;
             }
             .wsp-csv-charts-wrap {
                 margin-top: 28px;

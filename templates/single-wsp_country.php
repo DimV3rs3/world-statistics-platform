@@ -57,7 +57,9 @@ do_action( 'worldstat_before_country', $post_id, $iso2, $meta );
 
         // Placeholders for extension tabs (loaded via AJAX)
         foreach ( $tabs as $tab ) {
-            if ( $tab['is_core'] ) continue;
+            if ( ! empty( $tab['is_core'] ) ) {
+                continue;
+            }
             echo '<div class="wsp-tab-panel" data-tab="' . esc_attr( $tab['id'] ) . '">';
             echo '<div class="wsp-tab-loading"><span class="spinner is-active"></span> Загрузка...</div>';
             echo '</div>';

@@ -39,8 +39,9 @@
     text-transform: uppercase;
     letter-spacing: .5px;
 }
-/* Карточки показателей из CSV на обзоре страны: кириллица не должна принудительно капситься */
-.wsp-country-csv-block .wsp-stat-label {
+/* Карточки показателей из CSV: кириллица не должна принудительно капситься */
+.wsp-country-csv-block .wsp-stat-label,
+.wsp-country-indicators .wsp-stat-label {
     text-transform: none;
     letter-spacing: normal;
 }

@@ -199,6 +199,22 @@
     justify-content: center;
 }
 
+.wsp-tabs--nested .wsp-tab-nav--nested {
+    flex-wrap: wrap;
+    overflow: visible;
+    border-bottom: none;
+    scrollbar-width: none;
+}
+
+.wsp-tabs--nested .wsp-tab-nav--nested::-webkit-scrollbar {
+    display: none;
+}
+
+.wsp-tabs--nested .wsp-tab-btn {
+    font-size: 13px;
+    padding: 8px 12px;
+    overflow: visible;
+}
 
 /* ─── Archive Grid ──────────────────────────────────── */
 
@@ -426,7 +442,8 @@
 }
 
 .wsp-country-content {
-    margin-top: 20px;
+    margin-top: 16px;
+    margin-bottom: 0;
     line-height: 1.7;
 }
 

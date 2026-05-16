@@ -60,8 +60,8 @@
         if (!tip) return;
         tip.innerHTML = '<div class="tooltip-country">' + name + '</div>' + (val !== undefined ? '<div class="tooltip-value">' + formatVal(val) + '</div>' : '');
         tip.style.display = 'block';
-        tip.style.left = e.originalEvent.pageX + 'px';
-        tip.style.top = e.originalEvent.pageY + 'px';
+        tip.style.left = e.originalEvent.clientX + 'px';
+        tip.style.top = e.originalEvent.clientY + 'px';
         tip.style.zIndex = '9999';
     }
     function hideTip() { if (tip) tip.style.display = 'none'; }
