@@ -87,6 +87,15 @@ add_action( 'worldstat_init', array( 'WorldStat_Csv_Country_Meta_Importer', 'reg
 register_activation_hook( __FILE__, [ 'WorldStat_Installer', 'activate' ] );
 register_deactivation_hook( __FILE__, [ 'WorldStat_Installer', 'deactivate' ] );
 
+/**
+ * Сброс буфера вывода перед JSON (BOM/notice из расширений ломают admin-ajax).
+ */
+function worldstat_discard_ajax_output_buffer(): void {
+	while ( ob_get_level() > 0 ) {
+		ob_end_clean();
+	}
+}
+
 /* ─── Initialize Platform ───────────────────────────────────── */
 function worldstat_platform(): WorldStat_Core {
     return WorldStat_Core::instance();

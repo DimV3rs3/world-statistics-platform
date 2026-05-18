@@ -11,7 +11,31 @@
     /* ═══════════════════════════════════════════════════════
        TABS
     ═══════════════════════════════════════════════════════ */
+    function wspEscHtml(s) {
+        return String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
     WSP.Tabs = {
+        parseAjaxJson: function(xhr) {
+            if (xhr && xhr.responseJSON) {
+                return xhr.responseJSON;
+            }
+            var raw = (xhr && xhr.responseText) ? xhr.responseText : '';
+            raw = raw.replace(/^\uFEFF/, '');
+            if (!raw) {
+                return null;
+            }
+            try {
+                return JSON.parse(raw);
+            } catch (e) {
+                return null;
+            }
+        },
+
         init: function() {
             var self = this;
             $(document).on('click', '.wsp-tab-btn', function(e) {
@@ -55,8 +79,10 @@
                         $panel.html('<p class="wsp-error">Ошибка загрузки вкладки.</p>');
                     }
                 },
-                error: function() {
-                    $panel.html('<p class="wsp-error">Ошибка сети. Попробуйте снова.</p>');
+                error: function(xhr) {
+                    var res = WSP.Tabs.parseAjaxJson(xhr);
+                    var msg = (res && res.data && res.data.message) ? res.data.message : 'Ошибка сети. Попробуйте снова.';
+                    $panel.html('<p class="wsp-error">' + wspEscHtml(msg) + '</p>');
                 }
             });
         }

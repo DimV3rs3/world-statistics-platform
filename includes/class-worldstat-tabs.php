@@ -136,12 +136,18 @@ class WorldStat_Tabs {
         $iso2   = sanitize_text_field( $_POST['iso2'] ?? '' );
 
         if ( ! $tab_id || ! $iso2 ) {
+            if ( function_exists( 'worldstat_discard_ajax_output_buffer' ) ) {
+                worldstat_discard_ajax_output_buffer();
+            }
             wp_send_json_error( 'Missing parameters.' );
         }
 
         $ext_tab = worldstat_platform()->extensions->get_tab( $tab_id );
 
         if ( ! $ext_tab || ! is_callable( $ext_tab['callback'] ) ) {
+            if ( function_exists( 'worldstat_discard_ajax_output_buffer' ) ) {
+                worldstat_discard_ajax_output_buffer();
+            }
             wp_send_json_error( 'Tab not found or not callable.' );
         }
 
@@ -149,6 +155,9 @@ class WorldStat_Tabs {
         call_user_func( $ext_tab['callback'], $iso2 );
         $html = ob_get_clean();
 
+        if ( function_exists( 'worldstat_discard_ajax_output_buffer' ) ) {
+            worldstat_discard_ajax_output_buffer();
+        }
         wp_send_json_success( [ 'html' => $html ] );
     }
 }

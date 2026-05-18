@@ -19,6 +19,30 @@
 		return (cfg && cfg.i18n && cfg.i18n[key]) ? cfg.i18n[key] : fallback;
 	}
 
+	function parseAjaxJson(xhr) {
+		if (xhr && xhr.responseJSON) {
+			return xhr.responseJSON;
+		}
+		var raw = (xhr && xhr.responseText) ? xhr.responseText : '';
+		raw = raw.replace(/^\uFEFF/, '');
+		if (!raw) {
+			return null;
+		}
+		try {
+			return JSON.parse(raw);
+		} catch (e) {
+			return null;
+		}
+	}
+
+	function ajaxErrorMessage(xhr, fallback) {
+		var res = parseAjaxJson(xhr);
+		if (res && res.data && res.data.message) {
+			return res.data.message;
+		}
+		return fallback || i18n('networkError', 'Ошибка сети. Попробуйте снова.');
+	}
+
 	function setStatus(text) {
 		$('#wsp-country-analysis-status').text(text || '');
 	}
@@ -233,12 +257,7 @@
 				}
 			})
 			.fail(function (xhr) {
-				var msg = 'Request failed';
-				try {
-					if (xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
-						msg = xhr.responseJSON.data.message;
-					}
-				} catch (e) { /* ignore */ }
+				var msg = ajaxErrorMessage(xhr, i18n('networkError', 'Ошибка сети. Попробуйте снова.'));
 				$('#wsp-country-analysis-results').html('<p class="wsp-ca-notice">' + esc(msg) + '</p>');
 				setStatus(i18n('error', 'Ошибка'));
 			})

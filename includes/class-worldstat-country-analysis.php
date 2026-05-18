@@ -144,17 +144,17 @@ class WorldStat_Country_Analysis {
 
 	public static function ajax_run(): void {
 		if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( (string) $_POST['nonce'], 'wp_rest' ) ) {
-			wp_send_json_error( [ 'message' => __( 'Недействительный nonce.', 'flavor-worldstat' ) ], 403 );
+			self::send_json_error( [ 'message' => __( 'Недействительный nonce.', 'flavor-worldstat' ) ] );
 		}
 
 		$post_id = (int) ( $_POST['post_id'] ?? 0 );
 		if ( $post_id < 1 || get_post_type( $post_id ) !== WorldStat_Country_CPT::SLUG ) {
-			wp_send_json_error( [ 'message' => __( 'Страна не найдена.', 'flavor-worldstat' ) ], 404 );
+			self::send_json_error( [ 'message' => __( 'Страна не найдена.', 'flavor-worldstat' ) ] );
 		}
 
 		$data = worldstat_platform()->data ?? null;
 		if ( ! $data instanceof WorldStat_Data ) {
-			wp_send_json_error( [ 'message' => __( 'Модуль данных недоступен.', 'flavor-worldstat' ) ], 500 );
+			self::send_json_error( [ 'message' => __( 'Модуль данных недоступен.', 'flavor-worldstat' ) ] );
 		}
 
 		$grid_items = $data->get_country_grid_items( $post_id );
@@ -176,10 +176,30 @@ class WorldStat_Country_Analysis {
 		);
 
 		if ( empty( $result['ok'] ) ) {
-			wp_send_json_error( [ 'message' => (string) ( $result['error'] ?? __( 'Анализ недоступен.', 'flavor-worldstat' ) ) ] );
+			self::send_json_error( [ 'message' => (string) ( $result['error'] ?? __( 'Анализ недоступен.', 'flavor-worldstat' ) ) ] );
 		}
 
-		wp_send_json_success( $result );
+		self::send_json_success( $result );
+	}
+
+	/**
+	 * @param array<string,mixed> $data
+	 */
+	private static function send_json_success( array $data ): void {
+		if ( function_exists( 'worldstat_discard_ajax_output_buffer' ) ) {
+			worldstat_discard_ajax_output_buffer();
+		}
+		wp_send_json_success( $data );
+	}
+
+	/**
+	 * @param array<string,mixed> $data
+	 */
+	private static function send_json_error( array $data ): void {
+		if ( function_exists( 'worldstat_discard_ajax_output_buffer' ) ) {
+			worldstat_discard_ajax_output_buffer();
+		}
+		wp_send_json_error( $data );
 	}
 
 	private static function enqueue_assets( int $post_id ): void {
@@ -223,6 +243,7 @@ class WorldStat_Country_Analysis {
 					'cluster'       => __( 'Кластер', 'flavor-worldstat' ),
 					'years'         => __( 'Год', 'flavor-worldstat' ),
 					'period'        => __( 'Уровень', 'flavor-worldstat' ),
+					'networkError'  => __( 'Ошибка сети. Попробуйте снова.', 'flavor-worldstat' ),
 				],
 			]
 		);
