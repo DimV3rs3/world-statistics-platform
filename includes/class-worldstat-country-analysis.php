@@ -13,6 +13,8 @@ class WorldStat_Country_Analysis {
 	public static function init(): void {
 		add_action( 'wp_ajax_worldstat_run_country_analysis', [ self::class, 'ajax_run' ] );
 		add_action( 'wp_ajax_nopriv_worldstat_run_country_analysis', [ self::class, 'ajax_run' ] );
+		add_action( 'wp_ajax_worldstat_suggest_country_cluster_k', [ self::class, 'ajax_suggest_cluster_k' ] );
+		add_action( 'wp_ajax_nopriv_worldstat_suggest_country_cluster_k', [ self::class, 'ajax_suggest_cluster_k' ] );
 	}
 
 	/**
@@ -60,11 +62,16 @@ class WorldStat_Country_Analysis {
 		echo '</p>';
 		echo '</header>';
 
-		echo '<div class="wsp-country-analytics__controls wsp-country-analytics__controls--grid">';
+		echo '<div class="wsp-country-analytics__controls">';
+		echo '<div class="wsp-ca-settings">';
+
+		echo '<div class="wsp-ca-settings__section">';
+		echo '<span class="wsp-ca-settings__legend">' . esc_html__( 'Регрессия и классификация', 'flavor-worldstat' ) . '</span>';
+		echo '<div class="wsp-ca-settings__row wsp-ca-settings__row--regression">';
 
 		echo '<div class="wsp-ca-control wsp-ca-control--metric">';
 		echo '<label class="wsp-country-analytics__field" for="wsp-country-analysis-metric">';
-		echo esc_html__( 'Показатель (регрессия и классификация)', 'flavor-worldstat' );
+		echo esc_html__( 'Показатель', 'flavor-worldstat' );
 		echo '</label>';
 		echo '<select id="wsp-country-analysis-metric" class="wsp-select">';
 		echo '<option value="">' . esc_html__( '— выберите показатель —', 'flavor-worldstat' ) . '</option>';
@@ -79,23 +86,22 @@ class WorldStat_Country_Analysis {
 		echo '</select>';
 		echo '</div>';
 
-		echo '<div class="wsp-ca-control wsp-ca-control--narrow">';
+		echo '<div class="wsp-ca-control wsp-ca-control--compact">';
 		echo '<label class="wsp-country-analytics__field" for="wsp-country-analysis-k-classify">';
-		echo esc_html__( 'k — периоды (классификация)', 'flavor-worldstat' );
+		echo esc_html__( 'k — периоды', 'flavor-worldstat' );
 		echo '</label>';
-		echo '<input type="number" id="wsp-country-analysis-k-classify" class="wsp-input" min="2" max="4" value="3" />';
+		echo '<input type="number" id="wsp-country-analysis-k-classify" class="wsp-input wsp-input--num" min="2" max="4" value="3" />';
 		echo '</div>';
 
-		echo '<div class="wsp-ca-control wsp-ca-control--narrow">';
-		echo '<label class="wsp-country-analytics__field" for="wsp-country-analysis-k-cluster">';
-		echo esc_html__( 'k — кластеры показателей', 'flavor-worldstat' );
-		echo '</label>';
-		echo '<input type="number" id="wsp-country-analysis-k-cluster" class="wsp-input" min="2" max="6" value="3" />';
-		echo '</div>';
+		echo '</div></div>';
+
+		echo '<div class="wsp-ca-settings__section">';
+		echo '<span class="wsp-ca-settings__legend">' . esc_html__( 'Кластеризация', 'flavor-worldstat' ) . '</span>';
+		echo '<div class="wsp-ca-settings__row wsp-ca-settings__row--cluster">';
 
 		echo '<div class="wsp-ca-control wsp-ca-control--theme">';
 		echo '<label class="wsp-country-analytics__field" for="wsp-country-analysis-cluster-cat">';
-		echo esc_html__( 'Тема для кластеризации', 'flavor-worldstat' );
+		echo esc_html__( 'Тема', 'flavor-worldstat' );
 		echo '</label>';
 		echo '<select id="wsp-country-analysis-cluster-cat" class="wsp-select">';
 		foreach ( $cat_labels as $cid => $clabel ) {
@@ -104,14 +110,32 @@ class WorldStat_Country_Analysis {
 		echo '</select>';
 		echo '</div>';
 
-		echo '<div class="wsp-ca-control wsp-ca-control--actions">';
+		echo '<div class="wsp-ca-control wsp-ca-control--compact wsp-ca-control--k-cluster">';
+		echo '<label class="wsp-country-analytics__field" for="wsp-country-analysis-k-cluster">';
+		echo esc_html__( 'k — кластеры', 'flavor-worldstat' );
+		echo '</label>';
+		echo '<div class="wsp-ca-k-cluster-inline">';
+		echo '<input type="number" id="wsp-country-analysis-k-cluster" class="wsp-input wsp-input--num" min="2" max="6" value="3" />';
+		echo '<button type="button" class="wsp-btn wsp-btn-secondary wsp-btn--sm" id="wsp-country-analysis-k-cluster-tune">';
+		echo esc_html__( 'Подобрать k', 'flavor-worldstat' );
+		echo '</button>';
+		echo '</div>';
+		echo '</div>';
+
+		echo '</div>';
+		echo '<p class="wsp-ca-k-hint" id="wsp-country-analysis-k-cluster-hint" aria-live="polite">';
+		echo esc_html__( 'Отметьте показатели ниже — k подберётся автоматически.', 'flavor-worldstat' );
+		echo '</p>';
+		echo '</div>';
+
+		echo '<div class="wsp-ca-settings__actions">';
 		echo '<button type="button" class="wsp-btn wsp-btn-primary" id="wsp-country-analysis-run">';
 		echo esc_html__( 'Рассчитать', 'flavor-worldstat' );
 		echo '</button>';
 		echo '<span class="wsp-country-analytics__status" id="wsp-country-analysis-status" aria-live="polite"></span>';
 		echo '</div>';
 
-		echo '</div>';
+		echo '</div></div>';
 
 		echo '<div class="wsp-country-analytics__cluster-pick">';
 		echo '<div class="wsp-country-analytics__cluster-pick-head">';
@@ -182,6 +206,41 @@ class WorldStat_Country_Analysis {
 		self::send_json_success( $result );
 	}
 
+	public static function ajax_suggest_cluster_k(): void {
+		if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( (string) $_POST['nonce'], 'wp_rest' ) ) {
+			self::send_json_error( [ 'message' => __( 'Недействительный nonce.', 'flavor-worldstat' ) ] );
+		}
+
+		$post_id = (int) ( $_POST['post_id'] ?? 0 );
+		if ( $post_id < 1 || get_post_type( $post_id ) !== WorldStat_Country_CPT::SLUG ) {
+			self::send_json_error( [ 'message' => __( 'Страна не найдена.', 'flavor-worldstat' ) ] );
+		}
+
+		$data = worldstat_platform()->data ?? null;
+		if ( ! $data instanceof WorldStat_Data ) {
+			self::send_json_error( [ 'message' => __( 'Модуль данных недоступен.', 'flavor-worldstat' ) ] );
+		}
+
+		$cluster_ids = [];
+		if ( isset( $_POST['cluster_metrics'] ) && is_array( $_POST['cluster_metrics'] ) ) {
+			$cluster_ids = array_map( 'sanitize_text_field', wp_unslash( $_POST['cluster_metrics'] ) );
+		}
+
+		$result = WorldStat_Country_ML::suggest_cluster_k(
+			$data->get_country_grid_items( $post_id ),
+			[
+				'cluster_category'   => sanitize_key( (string) ( $_POST['cluster_category'] ?? 'all' ) ),
+				'cluster_metric_ids' => $cluster_ids,
+			]
+		);
+
+		if ( empty( $result['ok'] ) ) {
+			self::send_json_error( [ 'message' => (string) ( $result['message'] ?? '' ) ] );
+		}
+
+		self::send_json_success( $result );
+	}
+
 	/**
 	 * @param array<string,mixed> $data
 	 */
@@ -244,6 +303,10 @@ class WorldStat_Country_Analysis {
 					'years'         => __( 'Год', 'flavor-worldstat' ),
 					'period'        => __( 'Уровень', 'flavor-worldstat' ),
 					'networkError'  => __( 'Ошибка сети. Попробуйте снова.', 'flavor-worldstat' ),
+					'kHintDefault'  => __( 'Отметьте показатели ниже — k подберётся автоматически.', 'flavor-worldstat' ),
+					'kHintLoading'  => __( 'Подбор k…', 'flavor-worldstat' ),
+					'kHintApply'    => __( 'Подобрать k', 'flavor-worldstat' ),
+					'kRange'        => __( 'допустимо', 'flavor-worldstat' ),
 				],
 			]
 		);

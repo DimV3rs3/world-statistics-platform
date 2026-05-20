@@ -47,6 +47,70 @@
 		$('#wsp-country-analysis-status').text(text || '');
 	}
 
+	var kClusterManual = false;
+	var kSuggestTimer = null;
+	var kSuggestXhr = null;
+
+	function setKClusterHint(text) {
+		$('#wsp-country-analysis-k-cluster-hint').text(text || '');
+	}
+
+	function scheduleSuggestClusterK() {
+		if (kSuggestTimer) {
+			clearTimeout(kSuggestTimer);
+		}
+		kSuggestTimer = setTimeout(suggestClusterK, 400);
+	}
+
+	function suggestClusterK(forceApply) {
+		var cfg = window.wspCountryAnalysis;
+		if (!cfg || !cfg.ajaxUrl) {
+			return;
+		}
+
+		var clusterIds = collectClusterMetricIds();
+		if (!clusterIds.length) {
+			setKClusterHint(i18n('kHintDefault', 'Отметьте показатели — k подберётся автоматически.'));
+			return;
+		}
+
+		if (kSuggestXhr && kSuggestXhr.abort) {
+			kSuggestXhr.abort();
+		}
+
+		setKClusterHint(i18n('kHintLoading', 'Подбор k…'));
+
+		kSuggestXhr = $.post(cfg.ajaxUrl, {
+			action: 'worldstat_suggest_country_cluster_k',
+			nonce: cfg.nonce,
+			post_id: cfg.postId,
+			cluster_category: $('#wsp-country-analysis-cluster-cat').val() || 'all',
+			cluster_metrics: clusterIds
+		})
+			.done(function (res) {
+				if (!res || !res.success || !res.data) {
+					var msg = (res && res.data && res.data.message) ? res.data.message : '';
+					setKClusterHint(msg || i18n('kHintDefault', ''));
+					return;
+				}
+				var data = res.data;
+				var hint = data.message || '';
+				if (data.k_max && data.k) {
+					hint += ' (' + i18n('kRange', 'допустимо') + ' 2–' + data.k_max + ')';
+				}
+				setKClusterHint(hint);
+				if (data.k && (forceApply || !kClusterManual)) {
+					$('#wsp-country-analysis-k-cluster').val(data.k);
+				}
+			})
+			.fail(function (xhr) {
+				if (xhr && xhr.statusText === 'abort') {
+					return;
+				}
+				setKClusterHint(ajaxErrorMessage(xhr, i18n('kHintDefault', '')));
+			});
+	}
+
 	function filterClusterPicks() {
 		var cat = $('#wsp-country-analysis-cluster-cat').val() || 'all';
 		$('#wsp-cluster-metric-picks .wsp-ca-metric-pick').each(function () {
@@ -90,6 +154,9 @@
 		var html = '<div class="wsp-ca-chart wsp-chart-wrap">';
 		if (chartCfg.title) {
 			html += '<h4 class="wsp-chart-title">' + esc(chartCfg.title) + '</h4>';
+		}
+		if (chartCfg.subtitle) {
+			html += '<p class="wsp-chart-subtitle wsp-muted">' + esc(chartCfg.subtitle) + '</p>';
 		}
 		html += '<div class="wsp-chart-canvas-wrap" style="position:relative;height:' + h + 'px;">';
 		html += '<canvas id="' + id + '"></canvas></div></div>';
@@ -273,12 +340,26 @@
 
 		filterClusterPicks();
 
-		$('#wsp-country-analysis-cluster-cat').on('change', filterClusterPicks);
+		$('#wsp-country-analysis-cluster-cat').on('change', function () {
+			filterClusterPicks();
+			scheduleSuggestClusterK();
+		});
+		$('#wsp-cluster-metric-picks').on('change', 'input[type="checkbox"]', scheduleSuggestClusterK);
 		$('#wsp-cluster-select-visible').on('click', function () {
 			setVisibleClusterChecks(true);
+			scheduleSuggestClusterK();
 		});
 		$('#wsp-cluster-clear-visible').on('click', function () {
 			setVisibleClusterChecks(false);
+			setKClusterHint(i18n('kHintDefault', 'Отметьте показатели — k подберётся автоматически.'));
+		});
+
+		$('#wsp-country-analysis-k-cluster').on('input', function () {
+			kClusterManual = true;
+		});
+		$('#wsp-country-analysis-k-cluster-tune').on('click', function () {
+			kClusterManual = false;
+			suggestClusterK(true);
 		});
 
 		$('#wsp-country-analysis-run').on('click', runAnalysis);

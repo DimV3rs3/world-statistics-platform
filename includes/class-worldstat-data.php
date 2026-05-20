@@ -425,10 +425,10 @@ class WorldStat_Data {
     }
 
     /**
-     * @return array<string, array{label:string, icon:string, items:array<int,array<string,mixed>>}>
+     * @return array<string, array{label:string, icon:string}>
      */
-    public static function group_grid_items_by_category( array $grid_items ): array {
-        $defs = [
+    public static function metric_category_defs(): array {
+        return [
             'population'     => [ 'label' => __( 'Население', 'flavor-worldstat' ), 'icon' => 'groups' ],
             'health'         => [ 'label' => __( 'Здоровье', 'flavor-worldstat' ), 'icon' => 'heart' ],
             'urban'          => [ 'label' => __( 'Города', 'flavor-worldstat' ), 'icon' => 'building' ],
@@ -438,6 +438,21 @@ class WorldStat_Data {
             'governance'     => [ 'label' => __( 'Управление', 'flavor-worldstat' ), 'icon' => 'shield' ],
             'other'          => [ 'label' => __( 'Прочее', 'flavor-worldstat' ), 'icon' => 'chart-bar' ],
         ];
+    }
+
+    /**
+     * Dashicon для темы показателя (как у вкладки «Население», «Здоровье» и т.д.).
+     */
+    public static function metric_category_icon( string $category ): string {
+        $defs = self::metric_category_defs();
+        return $defs[ $category ]['icon'] ?? $defs['other']['icon'];
+    }
+
+    /**
+     * @return array<string, array{label:string, icon:string, items:array<int,array<string,mixed>>}>
+     */
+    public static function group_grid_items_by_category( array $grid_items ): array {
+        $defs = self::metric_category_defs();
 
         $groups = [];
         foreach ( $defs as $id => $def ) {
@@ -569,18 +584,18 @@ class WorldStat_Data {
             return [];
         }
 
-        static $metric_icons = null;
-        if ( null === $metric_icons ) {
-            $metric_icons = [
-                'population_total'           => [ 'label' => __( 'Население', 'flavor-worldstat' ), 'icon' => 'groups' ],
-                'population_density_per_km2' => [ 'label' => __( 'Плотность населения на км²', 'flavor-worldstat' ), 'icon' => 'chart-bar' ],
-                'surface_area_sqkm'          => [ 'label' => __( 'Площадь территории, км²', 'flavor-worldstat' ), 'icon' => 'editor-expand' ],
-                'urban_share_percent'        => [ 'label' => __( 'Доля городского населения, %', 'flavor-worldstat' ), 'icon' => 'admin-multisite' ],
-                'urban_land_area_sqkm'       => [ 'label' => __( 'Площадь урбанизированных территорий, км²', 'flavor-worldstat' ), 'icon' => 'building' ],
-                'largest_city_population'    => [ 'label' => __( 'Население крупнейшего города', 'flavor-worldstat' ), 'icon' => 'admin-home' ],
-                'forest_percentage'          => [ 'label' => __( 'Леса (% от территории)', 'flavor-worldstat' ), 'icon' => 'chart-area' ],
-                'railway_length'             => [ 'label' => __( 'Железные дороги, км', 'flavor-worldstat' ), 'icon' => 'migrate' ],
-                'road_length'                => [ 'label' => __( 'Дороги, км', 'flavor-worldstat' ), 'icon' => 'car' ],
+        static $metric_labels = null;
+        if ( null === $metric_labels ) {
+            $metric_labels = [
+                'population_total'           => __( 'Население', 'flavor-worldstat' ),
+                'population_density_per_km2' => __( 'Плотность населения на км²', 'flavor-worldstat' ),
+                'surface_area_sqkm'          => __( 'Площадь территории, км²', 'flavor-worldstat' ),
+                'urban_share_percent'        => __( 'Доля городского населения, %', 'flavor-worldstat' ),
+                'urban_land_area_sqkm'       => __( 'Площадь урбанизированных территорий, км²', 'flavor-worldstat' ),
+                'largest_city_population'    => __( 'Население крупнейшего города', 'flavor-worldstat' ),
+                'forest_percentage'          => __( 'Леса (% от территории)', 'flavor-worldstat' ),
+                'railway_length'             => __( 'Железные дороги, км', 'flavor-worldstat' ),
+                'road_length'                => __( 'Дороги, км', 'flavor-worldstat' ),
             ];
         }
 
@@ -595,15 +610,13 @@ class WorldStat_Data {
                 continue;
             }
 
-            $nice = $metric_icons[ $slug ] ?? [
-                'label' => $this->resolve_country_csv_metric_label_ru( $slug, $label ),
-                'icon'  => 'chart-bar',
-            ];
+            $category = self::metric_category_from_slug( $slug );
             $grid_items[] = [
                 'slug'       => $slug,
-                'label'      => $nice['label'],
+                'label'      => $metric_labels[ $slug ] ?? $this->resolve_country_csv_metric_label_ru( $slug, $label ),
                 'value'      => $this->format_csv_value( (float) $row['value'] ),
-                'icon'       => $nice['icon'],
+                'icon'       => self::metric_category_icon( $category ),
+                'category'   => $category,
                 'years_data' => is_array( $row['years'] ?? null ) ? $row['years'] : [],
                 'metric_id'  => 'csv-metric-' . $index,
             ];

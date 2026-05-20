@@ -76,6 +76,9 @@ final class WorldStat_Core {
     public function enqueue_public_assets(): void {
         if ( ! $this->is_wsp_page() ) return;
 
+        // Dashicons: used in tabs, metric cards, stats-grid (WP does not load them on the front end by default).
+        wp_enqueue_style( 'dashicons' );
+
         wp_enqueue_style( 'worldstat-platform', WSP_ASSETS_URL . 'css/platform.css', [], WSP_VERSION );
         wp_enqueue_style( 'worldstat-components', WSP_ASSETS_URL . 'css/components.css', [], WSP_VERSION );
         wp_enqueue_script( 'worldstat-platform', WSP_ASSETS_URL . 'js/platform.js', [ 'jquery' ], WSP_VERSION, true );

@@ -230,6 +230,172 @@ class WorldStat_Country_ML {
 	}
 
 	/**
+	 * Рекомендация k для k-means по отмеченным показателям (метод «локтя», как в эргономике).
+	 *
+	 * @param list<array<string,mixed>> $grid_items
+	 * @param array<string,mixed>       $args cluster_category, cluster_metric_ids
+	 * @return array{ok:bool,k?:int,k_max?:int,metrics_used?:int,message:string}
+	 */
+	public static function suggest_cluster_k( array $grid_items, array $args ): array {
+		$prep = self::prepare( $grid_items );
+		if ( null === $prep ) {
+			return [
+				'ok'      => false,
+				'message' => __( 'Недостаточно показателей с рядом ≥3 лет.', 'flavor-worldstat' ),
+			];
+		}
+
+		$cluster_category = sanitize_key( (string) ( $args['cluster_category'] ?? 'all' ) );
+		$cluster_ids      = array_map( 'sanitize_text_field', (array) ( $args['cluster_metric_ids'] ?? [] ) );
+		$cluster_ids      = array_values( array_filter( $cluster_ids ) );
+
+		if ( empty( $cluster_ids ) ) {
+			return [
+				'ok'      => false,
+				'message' => __( 'Отметьте показатели для кластеризации — тогда можно подобрать k.', 'flavor-worldstat' ),
+			];
+		}
+
+		$cluster_metrics = self::filter_metrics( $prep['metrics'], $cluster_category, $cluster_ids );
+		$built           = self::build_cluster_vectors( $prep, $cluster_metrics );
+		$vectors         = $built['vectors'];
+		$n               = count( $vectors );
+
+		if ( $n < 3 ) {
+			return [
+				'ok'      => false,
+				'message' => __( 'Для подбора k нужно минимум 3 показателя с полным рядом по общим годам.', 'flavor-worldstat' ),
+			];
+		}
+
+		$k_max = min( 6, $n );
+		$k     = self::optimal_k_elbow( $vectors, $k_max );
+
+		return [
+			'ok'           => true,
+			'k'            => $k,
+			'k_max'        => $k_max,
+			'metrics_used' => $n,
+			'message'      => sprintf(
+				/* translators: 1: recommended k, 2: metrics count */
+				__( 'Рекомендуется k = %1$d по %2$d показателям (метод «локтя» по профилям динамики).', 'flavor-worldstat' ),
+				$k,
+				$n
+			),
+		];
+	}
+
+	/**
+	 * @param array<string,mixed>        $prep
+	 * @param list<array<string,mixed>>  $metrics_subset
+	 * @return array{vectors:list<list<float>>,names:list<string>}
+	 */
+	private static function build_cluster_vectors( array $prep, array $metrics_subset ): array {
+		$years   = $prep['common_years'];
+		$vectors = [];
+		$names   = [];
+
+		foreach ( $metrics_subset as $m ) {
+			$raw = [];
+			$ok  = true;
+			foreach ( $years as $y ) {
+				if ( ! isset( $m['series'][ $y ] ) ) {
+					$ok = false;
+					break;
+				}
+				$raw[] = (float) $m['series'][ $y ];
+			}
+			if ( ! $ok || count( $raw ) < 3 ) {
+				continue;
+			}
+			$vectors[] = self::z_score_vector( $raw );
+			$names[]   = (string) ( $m['label'] ?? '' );
+		}
+
+		return [
+			'vectors' => $vectors,
+			'names'   => $names,
+		];
+	}
+
+	/**
+	 * Подбор k по кривой WCSS (elbow), адаптация WSErgo_Macro_Cluster_Optimizer::optimal_k_elbow.
+	 *
+	 * @param list<list<float>> $X
+	 */
+	private static function optimal_k_elbow( array $X, int $k_cap ): int {
+		$n     = count( $X );
+		$k_min = 2;
+		$k_max = min( max( $k_min, $k_cap ), min( 12, max( $k_min, (int) round( sqrt( $n ) ) ) ) );
+		if ( $n <= $k_max ) {
+			$k_max = max( $k_min, $n - 1 );
+		}
+
+		$wcss = [];
+		for ( $k = $k_min; $k <= $k_max; $k++ ) {
+			$labels     = self::kmeans( $X, $k, 45 )['labels'];
+			$wcss[ $k ] = self::within_cluster_ss( $X, $labels, $k );
+		}
+
+		$best_k  = min( $k_cap, $k_max );
+		$max_imp = 0.0;
+		for ( $k = $k_min; $k < $k_max; $k++ ) {
+			$imp = ( $wcss[ $k ] ?? 0.0 ) - ( $wcss[ $k + 1 ] ?? 0.0 );
+			if ( $imp > $max_imp ) {
+				$max_imp = $imp;
+			}
+		}
+		if ( $max_imp < 1e-12 ) {
+			return max( $k_min, min( $best_k, $k_cap ) );
+		}
+		$thresh = $max_imp * 0.12;
+		for ( $k = $k_min; $k < $k_max; $k++ ) {
+			$imp = ( $wcss[ $k ] ?? 0.0 ) - ( $wcss[ $k + 1 ] ?? 0.0 );
+			if ( $imp < $thresh ) {
+				return max( $k_min, min( $k, $k_cap ) );
+			}
+		}
+		return max( $k_min, min( $best_k, $k_cap ) );
+	}
+
+	/**
+	 * @param list<list<float>> $X
+	 * @param list<int>         $labels
+	 */
+	private static function within_cluster_ss( array $X, array $labels, int $k ): float {
+		$n = count( $X );
+		$d = count( $X[0] ?? [] );
+		if ( $n < 1 || $d < 1 ) {
+			return 0.0;
+		}
+		$sums   = array_fill( 0, $k, array_fill( 0, $d, 0.0 ) );
+		$counts = array_fill( 0, $k, 0 );
+		for ( $i = 0; $i < $n; $i++ ) {
+			$c = (int) ( $labels[ $i ] ?? 0 );
+			if ( $c < 0 || $c >= $k ) {
+				continue;
+			}
+			++$counts[ $c ];
+			for ( $j = 0; $j < $d; $j++ ) {
+				$sums[ $c ][ $j ] += $X[ $i ][ $j ];
+			}
+		}
+		$wcss = 0.0;
+		for ( $i = 0; $i < $n; $i++ ) {
+			$c = (int) ( $labels[ $i ] ?? 0 );
+			if ( $counts[ $c ] < 1 ) {
+				continue;
+			}
+			for ( $j = 0; $j < $d; $j++ ) {
+				$cent = $sums[ $c ][ $j ] / $counts[ $c ];
+				$diff = $X[ $i ][ $j ] - $cent;
+				$wcss += $diff * $diff;
+			}
+		}
+		return $wcss;
+	}
+
+	/**
 	 * @param array<string,mixed> $metric
 	 * @return array<string,mixed>
 	 */
@@ -328,26 +494,9 @@ class WorldStat_Country_ML {
 	 * @param list<array<string,mixed>>  $metrics_subset
 	 */
 	private static function cluster_metrics( array $prep, array $metrics_subset, int $k, string $category ): array {
-		$years   = $prep['common_years'];
-		$vectors = [];
-		$names   = [];
-
-		foreach ( $metrics_subset as $m ) {
-			$raw = [];
-			$ok  = true;
-			foreach ( $years as $y ) {
-				if ( ! isset( $m['series'][ $y ] ) ) {
-					$ok = false;
-					break;
-				}
-				$raw[] = (float) $m['series'][ $y ];
-			}
-			if ( ! $ok || count( $raw ) < 3 ) {
-				continue;
-			}
-			$vectors[] = self::z_score_vector( $raw );
-			$names[]   = $m['label'];
-		}
+		$built   = self::build_cluster_vectors( $prep, $metrics_subset );
+		$vectors = $built['vectors'];
+		$names   = $built['names'];
 
 		$n = count( $vectors );
 		if ( $n < $k ) {
@@ -376,29 +525,7 @@ class WorldStat_Country_ML {
 			$size_data[]   = count( $groups[ $c ] );
 		}
 
-		$scatter_sets = [];
-		for ( $c = 0; $c < $k; ++$c ) {
-			$pts = [];
-			foreach ( $labels as $i => $lab ) {
-				if ( (int) $lab !== $c ) {
-					continue;
-				}
-				$pts[] = [
-					'x' => (float) $vectors[ $i ][0],
-					'y' => (float) ( $vectors[ $i ][1] ?? $vectors[ $i ][0] ),
-				];
-			}
-			if ( ! empty( $pts ) ) {
-				$scatter_sets[] = [
-					'label' => sprintf( __( 'Кластер %d', 'flavor-worldstat' ), $c + 1 ),
-					'color' => self::CLUSTER_COLORS[ $c % count( self::CLUSTER_COLORS ) ],
-					'data'  => $pts,
-				];
-			}
-		}
-
-		$year_a = (string) ( $years[0] ?? '' );
-		$year_b = (string) ( $years[1] ?? $year_a );
+		$scatter_chart = self::build_cluster_scatter_chart( $vectors, $names, $labels, $k, $prep['common_years'] );
 
 		return [
 			'ok'          => true,
@@ -420,17 +547,161 @@ class WorldStat_Country_ML {
 					],
 					'height'   => 240,
 				],
-				[
-					'type'     => 'scatter',
-					'title'    => __( 'Профили показателей', 'flavor-worldstat' ),
-					'labels'   => [],
-					'datasets' => $scatter_sets,
-					'x_label'  => sprintf( __( 'z(%s)', 'flavor-worldstat' ), $year_a ),
-					'y_label'  => sprintf( __( 'z(%s)', 'flavor-worldstat' ), $year_b ),
-					'height'   => 300,
-				],
+				$scatter_chart,
 			],
 		];
+	}
+
+	/**
+	 * Scatter: PCA по всем годам (2D), подписи точек — в tooltip.
+	 *
+	 * @param list<list<float>> $vectors
+	 * @param list<string>      $names
+	 * @param list<int>         $labels
+	 * @param list<int>         $common_years
+	 * @return array<string,mixed>
+	 */
+	private static function build_cluster_scatter_chart( array $vectors, array $names, array $labels, int $k, array $common_years ): array {
+		$projection = self::profile_summary_scatter_projection( $vectors, $common_years );
+		$coords     = self::soften_scatter_outliers( $projection['coords'] );
+		$scatter_sets = [];
+		for ( $c = 0; $c < $k; ++$c ) {
+			$pts = [];
+			foreach ( $labels as $i => $lab ) {
+				if ( (int) $lab !== $c || ! isset( $coords[ $i ] ) ) {
+					continue;
+				}
+				$pts[] = [
+					'x'     => (float) $coords[ $i ]['x'],
+					'y'     => (float) $coords[ $i ]['y'],
+					'label' => (string) ( $names[ $i ] ?? '' ),
+				];
+			}
+			if ( ! empty( $pts ) ) {
+				$scatter_sets[] = [
+					'label' => sprintf( __( 'Кластер %d', 'flavor-worldstat' ), $c + 1 ),
+					'color' => self::CLUSTER_COLORS[ $c % count( self::CLUSTER_COLORS ) ],
+					'data'  => $pts,
+				];
+			}
+		}
+
+		return [
+			'type'        => 'scatter',
+			'title'       => __( 'Профили показателей', 'flavor-worldstat' ),
+			'subtitle'    => $projection['subtitle'] ?? '',
+			'labels'      => [],
+			'datasets'    => $scatter_sets,
+			'x_label'     => $projection['x_label'],
+			'y_label'     => $projection['y_label'],
+			'height'      => 320,
+		];
+	}
+
+	/**
+	 * Две оси для scatter: z в последнем общем году и линейный тренд (не среднее z — оно ≈0 после нормализации).
+	 *
+	 * @param list<list<float>> $vectors
+	 * @param list<int>         $years
+	 * @return array{coords:list<array{x:float,y:float}>,x_label:string,y_label:string,subtitle:string}
+	 */
+	private static function profile_summary_scatter_projection( array $vectors, array $years ): array {
+		$coords = [];
+		$idx    = range( 0, max( 0, count( $vectors[0] ?? [] ) - 1 ) );
+		$year_b = (string) ( $years[ count( $years ) - 1 ] ?? '' );
+
+		foreach ( $vectors as $row ) {
+			$n_row = count( $row );
+			if ( $n_row < 1 ) {
+				$coords[] = [ 'x' => 0.0, 'y' => 0.0 ];
+				continue;
+			}
+			$z_last = (float) $row[ $n_row - 1 ];
+			$slope  = 0.0;
+			if ( $n_row >= 2 ) {
+				$xs  = array_slice( $idx, 0, $n_row );
+				$fit = self::linear_fit( array_map( 'floatval', $xs ), $row );
+				if ( null !== $fit ) {
+					$slope = (float) $fit['slope'];
+				}
+			}
+			$coords[] = [
+				'x' => round( $z_last, 3 ),
+				'y' => round( $slope, 4 ),
+			];
+		}
+
+		$year_a = (string) ( $years[0] ?? '' );
+
+		return [
+			'coords'   => $coords,
+			'x_label'  => sprintf(
+				/* translators: %s: year */
+				__( 'Уровень z (%s)', 'flavor-worldstat' ),
+				$year_b
+			),
+			'y_label'  => __( 'Тренд (наклон z)', 'flavor-worldstat' ),
+			'subtitle' => sprintf(
+				/* translators: 1: first year, 2: last year */
+				__( 'Точка = показатель: насколько в %2$s он выше/ниже своей нормы (ось X) и растёт или падает по годам %1$s–%2$s (ось Y). Кластеры — по полному z-ряду.', 'flavor-worldstat' ),
+				$year_a,
+				$year_b
+			),
+		];
+	}
+
+	/**
+	 * Сжимает экстремальные точки на графике (5–95 перцентиль), чтобы один выброс не ломал масштаб.
+	 *
+	 * @param list<array{x:float,y:float}> $coords
+	 * @return list<array{x:float,y:float}>
+	 */
+	private static function soften_scatter_outliers( array $coords ): array {
+		if ( count( $coords ) < 4 ) {
+			return $coords;
+		}
+		$xs = array_column( $coords, 'x' );
+		$ys = array_column( $coords, 'y' );
+		$bx = self::percentile( $xs, 5 );
+		$tx = self::percentile( $xs, 95 );
+		$by = self::percentile( $ys, 5 );
+		$ty = self::percentile( $ys, 95 );
+		if ( abs( $tx - $bx ) < 1e-9 ) {
+			$bx -= 0.5;
+			$tx += 0.5;
+		}
+		if ( abs( $ty - $by ) < 1e-9 ) {
+			$by -= 0.5;
+			$ty += 0.5;
+		}
+		$out = [];
+		foreach ( $coords as $pt ) {
+			$out[] = [
+				'x' => max( $bx, min( $tx, (float) $pt['x'] ) ),
+				'y' => max( $by, min( $ty, (float) $pt['y'] ) ),
+			];
+		}
+		return $out;
+	}
+
+	/**
+	 * @param list<float> $values
+	 */
+	private static function percentile( array $values, float $pct ): float {
+		$vals = array_values( $values );
+		sort( $vals, SORT_NUMERIC );
+		$n = count( $vals );
+		if ( $n < 1 ) {
+			return 0.0;
+		}
+		$idx = ( $pct / 100.0 ) * ( $n - 1 );
+		$lo  = (int) floor( $idx );
+		$hi  = (int) ceil( $idx );
+		if ( $lo === $hi ) {
+			return (float) $vals[ $lo ];
+		}
+		$w = $idx - $lo;
+		return (float) ( $vals[ $lo ] * ( 1.0 - $w ) + $vals[ $hi ] * $w );
 	}
 
 	/**

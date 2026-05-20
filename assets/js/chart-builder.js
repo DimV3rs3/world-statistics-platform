@@ -40,8 +40,11 @@
 
                 if (type === 'scatter') {
                     dataset.showLine = false;
-                    dataset.pointRadius = 5;
-                    dataset.pointHoverRadius = 7;
+                    dataset.pointRadius = 6;
+                    dataset.pointHoverRadius = 9;
+                    dataset.pointBorderWidth = 1.5;
+                    dataset.pointBorderColor = color;
+                    dataset.backgroundColor = color + '99';
                 }
 
                 if (config.type === 'area') {
@@ -65,8 +68,17 @@
                         display: false, // title rendered in PHP
                     },
                     tooltip: {
-                        mode: 'index',
-                        intersect: false,
+                        mode: type === 'scatter' ? 'nearest' : 'index',
+                        intersect: type === 'scatter',
+                        callbacks: type === 'scatter' ? {
+                            label: function(ctx) {
+                                var raw = ctx.raw || {};
+                                var name = raw.label ? (raw.label + ': ') : '';
+                                var x = typeof ctx.parsed.x === 'number' ? ctx.parsed.x.toFixed(2) : ctx.parsed.x;
+                                var y = typeof ctx.parsed.y === 'number' ? ctx.parsed.y.toFixed(2) : ctx.parsed.y;
+                                return name + '(' + x + ', ' + y + ')';
+                            }
+                        } : undefined
                     }
                 },
                 scales: {}
@@ -89,6 +101,16 @@
                 if (type === 'scatter') {
                     options.scales.x.type = 'linear';
                     options.scales.y.type = 'linear';
+                    var tickFmt = function(v) {
+                        var n = Number(v);
+                        if (!isFinite(n)) return v;
+                        if (Math.abs(n) >= 100 || (Math.abs(n) > 0 && Math.abs(n) < 0.05)) {
+                            return n.toFixed(2);
+                        }
+                        return n.toFixed(2);
+                    };
+                    options.scales.x.ticks = { callback: tickFmt };
+                    options.scales.y.ticks = { callback: tickFmt };
                 }
             }
 

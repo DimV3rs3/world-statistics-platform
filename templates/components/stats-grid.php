@@ -14,7 +14,17 @@ $cols = $opts['columns'] ?? 4;
         <?php if ( ! empty( $item['icon'] ) ) : ?>
             <span class="wsp-stat-icon dashicons dashicons-<?php echo esc_attr( $item['icon'] ); ?>"></span>
         <?php endif; ?>
-        <span class="wsp-stat-value"><?php echo esc_html( $item['value'] ?? '' ); ?></span>
+        <?php
+        $badge_slug  = ! empty( $item['badge_slug'] ) ? sanitize_key( (string) $item['badge_slug'] ) : '';
+        $badge_class = 'wsp-stat-badge' . ( $badge_slug !== '' ? ' wsp-stat-badge--' . $badge_slug : '' );
+        $value_class = 'wsp-stat-value' . ( ! empty( $item['badge'] ) ? ' wsp-stat-value--with-badge' : '' );
+        ?>
+        <span class="<?php echo esc_attr( $value_class ); ?>">
+            <?php echo esc_html( $item['value'] ?? '' ); ?>
+            <?php if ( ! empty( $item['badge'] ) ) : ?>
+                <span class="<?php echo esc_attr( $badge_class ); ?>"><?php echo esc_html( (string) $item['badge'] ); ?></span>
+            <?php endif; ?>
+        </span>
         <span class="wsp-stat-label"><?php echo esc_html( $item['label'] ?? '' ); ?></span>
         <?php if ( ! empty( $item['change'] ) ) : ?>
             <span class="wsp-stat-change <?php echo $change_class; ?>"><?php echo esc_html( $item['change'] ); ?></span>
