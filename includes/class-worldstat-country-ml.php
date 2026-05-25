@@ -101,6 +101,22 @@ class WorldStat_Country_ML {
 	}
 
 	/**
+	 * Публичный API линейного тренда показателя по годам (сравнение стран, аналитика).
+	 *
+	 * @param array{label:string,series:array<int,float>,id?:string,slug?:string} $metric
+	 * @return array<string,mixed>
+	 */
+	public static function regression_trend_for_metric( array $metric ): array {
+		if ( empty( $metric['series'] ) || ! is_array( $metric['series'] ) ) {
+			return [
+				'ok'      => false,
+				'message' => __( 'Нет ряда по годам.', 'flavor-worldstat' ),
+			];
+		}
+		return self::regression_trend( $metric );
+	}
+
+	/**
 	 * @param list<array<string,mixed>> $grid_items
 	 * @param array<string,mixed>       $args metric_id, k_cluster, k_classify, cluster_category, cluster_metric_ids
 	 * @return array<string,mixed>

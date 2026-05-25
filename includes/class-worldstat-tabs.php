@@ -52,14 +52,23 @@ class WorldStat_Tabs {
             'is_core'  => true,
         ];
 
-        // Extension tabs
+        // Extension tabs (несколько вкладок на одно расширение, напр. ergonomics + compare).
         $ext_tabs = worldstat_platform()->extensions->get_tabs();
-        foreach ( $ext_tabs as $ext_id => $config ) {
-            $tabs[] = [
-                'id'       => $ext_id,
-                'title'    => $config['title'],
-                'icon'     => $config['icon'],
-                'priority' => $config['priority'],
+        $seen     = [];
+        foreach ( $ext_tabs as $key => $config ) {
+            if ( ! is_array( $config ) ) {
+                continue;
+            }
+            $tab_id = isset( $config['id'] ) ? sanitize_key( (string) $config['id'] ) : sanitize_key( (string) $key );
+            if ( $tab_id === '' || isset( $seen[ $tab_id ] ) ) {
+                continue;
+            }
+            $seen[ $tab_id ] = true;
+            $tabs[]          = [
+                'id'       => $tab_id,
+                'title'    => $config['title'] ?? $tab_id,
+                'icon'     => $config['icon'] ?? 'dashicons-admin-plugins',
+                'priority' => (int) ( $config['priority'] ?? 50 ),
                 'is_core'  => false,
             ];
         }

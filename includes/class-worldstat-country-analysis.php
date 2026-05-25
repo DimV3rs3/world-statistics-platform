@@ -13,8 +13,6 @@ class WorldStat_Country_Analysis {
 	public static function init(): void {
 		add_action( 'wp_ajax_worldstat_run_country_analysis', [ self::class, 'ajax_run' ] );
 		add_action( 'wp_ajax_nopriv_worldstat_run_country_analysis', [ self::class, 'ajax_run' ] );
-		add_action( 'wp_ajax_worldstat_suggest_country_cluster_k', [ self::class, 'ajax_suggest_cluster_k' ] );
-		add_action( 'wp_ajax_nopriv_worldstat_suggest_country_cluster_k', [ self::class, 'ajax_suggest_cluster_k' ] );
 	}
 
 	/**
@@ -39,8 +37,6 @@ class WorldStat_Country_Analysis {
 
 		self::enqueue_assets( $post_id );
 
-		$cat_labels = WorldStat_Country_ML::category_labels();
-
 		echo '<section class="wsp-country-analytics" id="wsp-country-analytics" aria-labelledby="wsp-country-analytics-title">';
 		echo '<header class="wsp-country-analytics__head">';
 		echo '<h3 id="wsp-country-analytics-title" class="wsp-country-analytics__title">';
@@ -48,7 +44,7 @@ class WorldStat_Country_Analysis {
 		echo '</h3>';
 		echo '<p class="wsp-country-analytics__desc">';
 		echo esc_html__(
-			'Регрессия строит линейный тренд до 2050 г.; классификация лет учитывает факт и прогноз. Кластеризация — по отмеченным показателям и теме.',
+			'Регрессия строит линейный тренд показателя до 2050 г. Классификация — по уровням эргономичности страны (сводный E и оси F, Cm, H, A, S, Ct). Сравнение стран по регрессии и рейтингу — на вкладке «Сравнение».',
 			'flavor-worldstat'
 		);
 		echo '</p>';
@@ -61,6 +57,8 @@ class WorldStat_Country_Analysis {
 		) );
 		echo '</p>';
 		echo '</header>';
+
+		self::render_ergo_classification_block( $post_id );
 
 		echo '<div class="wsp-country-analytics__controls">';
 		echo '<div class="wsp-ca-settings">';
@@ -86,47 +84,7 @@ class WorldStat_Country_Analysis {
 		echo '</select>';
 		echo '</div>';
 
-		echo '<div class="wsp-ca-control wsp-ca-control--compact">';
-		echo '<label class="wsp-country-analytics__field" for="wsp-country-analysis-k-classify">';
-		echo esc_html__( 'k — периоды', 'flavor-worldstat' );
-		echo '</label>';
-		echo '<input type="number" id="wsp-country-analysis-k-classify" class="wsp-input wsp-input--num" min="2" max="4" value="3" />';
-		echo '</div>';
-
 		echo '</div></div>';
-
-		echo '<div class="wsp-ca-settings__section">';
-		echo '<span class="wsp-ca-settings__legend">' . esc_html__( 'Кластеризация', 'flavor-worldstat' ) . '</span>';
-		echo '<div class="wsp-ca-settings__row wsp-ca-settings__row--cluster">';
-
-		echo '<div class="wsp-ca-control wsp-ca-control--theme">';
-		echo '<label class="wsp-country-analytics__field" for="wsp-country-analysis-cluster-cat">';
-		echo esc_html__( 'Тема', 'flavor-worldstat' );
-		echo '</label>';
-		echo '<select id="wsp-country-analysis-cluster-cat" class="wsp-select">';
-		foreach ( $cat_labels as $cid => $clabel ) {
-			printf( '<option value="%s">%s</option>', esc_attr( $cid ), esc_html( $clabel ) );
-		}
-		echo '</select>';
-		echo '</div>';
-
-		echo '<div class="wsp-ca-control wsp-ca-control--compact wsp-ca-control--k-cluster">';
-		echo '<label class="wsp-country-analytics__field" for="wsp-country-analysis-k-cluster">';
-		echo esc_html__( 'k — кластеры', 'flavor-worldstat' );
-		echo '</label>';
-		echo '<div class="wsp-ca-k-cluster-inline">';
-		echo '<input type="number" id="wsp-country-analysis-k-cluster" class="wsp-input wsp-input--num" min="2" max="6" value="3" />';
-		echo '<button type="button" class="wsp-btn wsp-btn-secondary wsp-btn--sm" id="wsp-country-analysis-k-cluster-tune">';
-		echo esc_html__( 'Подобрать k', 'flavor-worldstat' );
-		echo '</button>';
-		echo '</div>';
-		echo '</div>';
-
-		echo '</div>';
-		echo '<p class="wsp-ca-k-hint" id="wsp-country-analysis-k-cluster-hint" aria-live="polite">';
-		echo esc_html__( 'Отметьте показатели ниже — k подберётся автоматически.', 'flavor-worldstat' );
-		echo '</p>';
-		echo '</div>';
 
 		echo '<div class="wsp-ca-settings__actions">';
 		echo '<button type="button" class="wsp-btn wsp-btn-primary" id="wsp-country-analysis-run">';
@@ -137,31 +95,8 @@ class WorldStat_Country_Analysis {
 
 		echo '</div></div>';
 
-		echo '<div class="wsp-country-analytics__cluster-pick">';
-		echo '<div class="wsp-country-analytics__cluster-pick-head">';
-		echo '<span class="wsp-country-analytics__field">' . esc_html__( 'Показатели для кластеризации', 'flavor-worldstat' ) . '</span>';
-		echo '<button type="button" class="wsp-btn-link" id="wsp-cluster-select-visible">' . esc_html__( 'Выбрать все', 'flavor-worldstat' ) . '</button>';
-		echo '<button type="button" class="wsp-btn-link" id="wsp-cluster-clear-visible">' . esc_html__( 'Снять все', 'flavor-worldstat' ) . '</button>';
-		echo '</div>';
-		echo '<div class="wsp-ca-metric-picks" id="wsp-cluster-metric-picks">';
-		foreach ( $chartable as $item ) {
-			$mid  = (string) ( $item['metric_id'] ?? $item['slug'] ?? '' );
-			$slug = sanitize_key( (string) ( $item['slug'] ?? '' ) );
-			$cat  = WorldStat_Data::metric_category_from_slug( $slug );
-			printf(
-				'<label class="wsp-ca-metric-pick" data-category="%s">'
-				. '<input type="checkbox" name="cluster_metrics[]" value="%s" /> '
-				. '<span>%s</span></label>',
-				esc_attr( $cat ),
-				esc_attr( $mid ),
-				esc_html( (string) ( $item['label'] ?? $mid ) )
-			);
-		}
-		echo '</div>';
-		echo '</div>';
-
 		echo '<div class="wsp-country-analytics__results" id="wsp-country-analysis-results">';
-		echo '<p class="wsp-muted">' . esc_html__( 'Выберите параметры и нажмите «Рассчитать». Анализ не запускается автоматически.', 'flavor-worldstat' ) . '</p>';
+		echo '<p class="wsp-muted">' . esc_html__( 'Ниже после «Рассчитать» появится регрессия выбранного показателя. Классификация эргономичности — в блоке выше.', 'flavor-worldstat' ) . '</p>';
 		echo '</div>';
 		echo '</section>';
 	}
@@ -183,19 +118,11 @@ class WorldStat_Country_Analysis {
 
 		$grid_items = $data->get_country_grid_items( $post_id );
 
-		$cluster_ids = [];
-		if ( isset( $_POST['cluster_metrics'] ) && is_array( $_POST['cluster_metrics'] ) ) {
-			$cluster_ids = array_map( 'sanitize_text_field', wp_unslash( $_POST['cluster_metrics'] ) );
-		}
-
 		$result = WorldStat_Country_ML::analyze(
 			$grid_items,
 			[
-				'metric_id'          => sanitize_text_field( (string) ( $_POST['metric_id'] ?? '' ) ),
-				'k_cluster'          => (int) ( $_POST['k_cluster'] ?? 3 ),
-				'k_classify'         => (int) ( $_POST['k_classify'] ?? 3 ),
-				'cluster_category'   => sanitize_key( (string) ( $_POST['cluster_category'] ?? 'all' ) ),
-				'cluster_metric_ids' => $cluster_ids,
+				'metric_id'  => sanitize_text_field( (string) ( $_POST['metric_id'] ?? '' ) ),
+				'k_classify' => 0,
 			]
 		);
 
@@ -203,42 +130,161 @@ class WorldStat_Country_Analysis {
 			self::send_json_error( [ 'message' => (string) ( $result['error'] ?? __( 'Анализ недоступен.', 'flavor-worldstat' ) ) ] );
 		}
 
+		unset( $result['clustering'] );
+		$result['classification'] = self::build_ergo_classification_payload( $post_id );
+
 		self::send_json_success( $result );
 	}
 
-	public static function ajax_suggest_cluster_k(): void {
-		if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( (string) $_POST['nonce'], 'wp_rest' ) ) {
-			self::send_json_error( [ 'message' => __( 'Недействительный nonce.', 'flavor-worldstat' ) ] );
+	/**
+	 * Классификация по индексам эргономичности (плагин ergonomics), без k-means по годам.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private static function build_ergo_classification_payload( int $post_id ): array {
+		$title = __( 'Классификация по уровням эргономичности', 'flavor-worldstat' );
+		$desc  = __( 'Итог согласован с взвешенным баллом шести критериев (веса E) и их уровнями. По осям — динамическая шкала min–max выборки.', 'flavor-worldstat' );
+
+		if ( ! class_exists( 'WSErgo_Tier_Classifier' ) || ! class_exists( 'WSErgo_Settings' ) ) {
+			return [
+				'ok'          => false,
+				'title'       => $title,
+				'description' => $desc,
+				'message'     => __( 'Модуль эргономичности не активен.', 'flavor-worldstat' ),
+			];
+		}
+		if ( WSErgo_Settings::get_country_index_source() !== 'macro_datasets' ) {
+			return [
+				'ok'          => false,
+				'title'       => $title,
+				'description' => $desc,
+				'message'     => __( 'Классификация по осям доступна при расчёте индекса страны из CSV платформы.', 'flavor-worldstat' ),
+			];
 		}
 
-		$post_id = (int) ( $_POST['post_id'] ?? 0 );
-		if ( $post_id < 1 || get_post_type( $post_id ) !== WorldStat_Country_CPT::SLUG ) {
-			self::send_json_error( [ 'message' => __( 'Страна не найдена.', 'flavor-worldstat' ) ] );
+		$iso2 = self::resolve_country_iso2( $post_id );
+		if ( $iso2 === '' ) {
+			return [
+				'ok'          => false,
+				'title'       => $title,
+				'description' => $desc,
+				'message'     => __( 'Не удалось определить код страны.', 'flavor-worldstat' ),
+			];
 		}
 
-		$data = worldstat_platform()->data ?? null;
-		if ( ! $data instanceof WorldStat_Data ) {
-			self::send_json_error( [ 'message' => __( 'Модуль данных недоступен.', 'flavor-worldstat' ) ] );
+		$tier = WSErgo_Tier_Classifier::get_tier_for_iso2( $iso2 );
+		if ( ! is_array( $tier ) || empty( $tier['label'] ) || ( $tier['label'] ?? '' ) === '—' ) {
+			return [
+				'ok'          => false,
+				'title'       => $title,
+				'description' => $desc,
+				'message'     => __( 'Нет рассчитанных индексов эргономичности для этой страны.', 'flavor-worldstat' ),
+			];
 		}
 
-		$cluster_ids = [];
-		if ( isset( $_POST['cluster_metrics'] ) && is_array( $_POST['cluster_metrics'] ) ) {
-			$cluster_ids = array_map( 'sanitize_text_field', wp_unslash( $_POST['cluster_metrics'] ) );
+		$axis_labels = WSErgo_Tier_Classifier::axis_labels_ru();
+		$axes_rows   = [];
+		foreach ( WSErgo_Tier_Classifier::SCORE_KEYS as $k ) {
+			if ( ! isset( $tier['axes'][ $k ] ) ) {
+				continue;
+			}
+			$axis_tier = isset( $tier['axis_tiers'][ $k ]['label'] ) ? (string) $tier['axis_tiers'][ $k ]['label'] : '';
+			$axes_rows[] = [
+				'axis'  => (string) ( $axis_labels[ $k ] ?? $k ),
+				'score' => (string) $tier['axes'][ $k ],
+				'tier'  => $axis_tier,
+			];
 		}
 
-		$result = WorldStat_Country_ML::suggest_cluster_k(
-			$data->get_country_grid_items( $post_id ),
-			[
-				'cluster_category'   => sanitize_key( (string) ( $_POST['cluster_category'] ?? 'all' ) ),
-				'cluster_metric_ids' => $cluster_ids,
-			]
-		);
-
-		if ( empty( $result['ok'] ) ) {
-			self::send_json_error( [ 'message' => (string) ( $result['message'] ?? '' ) ] );
+		$compare_url = '';
+		if ( class_exists( 'WSCities_CPT' ) && method_exists( 'WSCities_CPT', 'get_country_tab_url' ) ) {
+			$compare_url = WSCities_CPT::get_country_tab_url( $iso2, 'compare' );
 		}
 
-		self::send_json_success( $result );
+		return [
+			'ok'           => true,
+			'title'        => $title,
+			'description'  => $desc,
+			'tier_label'   => (string) ( $tier['label'] ?? '' ),
+			'tier_slug'    => sanitize_key( (string) ( $tier['slug'] ?? '' ) ),
+			'composite'    => isset( $tier['composite'] ) ? (string) $tier['composite'] : '',
+			'tier_reason'  => (string) ( $tier['tier_reason'] ?? '' ),
+			'cluster_label'=> (string) ( $tier['cluster_label'] ?? '' ),
+			'axes'         => $axes_rows,
+			'compare_url'  => $compare_url,
+			'compare_hint' => __( 'Сравнение с другими странами (регрессия и рейтинг) — на вкладке «Сравнение».', 'flavor-worldstat' ),
+		];
+	}
+
+	/**
+	 * Постоянный блок классификации в «Аналитике показателей».
+	 */
+	private static function render_ergo_classification_block( int $post_id ): void {
+		$payload = self::build_ergo_classification_payload( $post_id );
+		echo '<div class="wsp-country-analytics__ergo" id="wsp-country-analytics-ergo">';
+		if ( empty( $payload['ok'] ) ) {
+			$msg = isset( $payload['message'] ) ? (string) $payload['message'] : '';
+			echo '<p class="wsp-muted">' . esc_html( $msg !== '' ? $msg : __( 'Классификация эргономичности недоступна.', 'flavor-worldstat' ) ) . '</p>';
+			echo '</div>';
+			return;
+		}
+		$slug = sanitize_key( (string) ( $payload['tier_slug'] ?? '' ) );
+		echo '<h4 class="wsp-ca-block__title" style="margin:0 0 8px;">' . esc_html( (string) ( $payload['title'] ?? '' ) ) . '</h4>';
+		if ( ! empty( $payload['description'] ) ) {
+			echo '<p class="wsp-muted" style="margin:0 0 10px;">' . esc_html( (string) $payload['description'] ) . '</p>';
+		}
+		echo '<p class="wsp-ca-ergo-tier"><span class="wsergo-tier-badge wsergo-tier-badge--' . esc_attr( $slug ) . '">'
+			. esc_html( (string) ( $payload['tier_label'] ?? '' ) ) . '</span>';
+		if ( ! empty( $payload['composite'] ) ) {
+			echo ' <span class="wsp-muted">(' . esc_html__( 'Взвешенный балл', 'flavor-worldstat' ) . ': '
+				. esc_html( (string) $payload['composite'] ) . ')</span>';
+		}
+		if ( ! empty( $payload['tier_reason'] ) ) {
+			echo '<p class="wsp-muted" style="margin:6px 0 0;">' . esc_html( (string) $payload['tier_reason'] ) . '</p>';
+		}
+		if ( ! empty( $payload['cluster_label'] ) ) {
+			echo '<p class="wsp-muted" style="margin:4px 0 0;">' . esc_html__( 'Профиль', 'flavor-worldstat' ) . ': '
+				. esc_html( (string) $payload['cluster_label'] ) . '</p>';
+		}
+		echo '</p>';
+		$axes = isset( $payload['axes'] ) && is_array( $payload['axes'] ) ? $payload['axes'] : array();
+		if ( ! empty( $axes ) ) {
+			echo '<table class="wsp-ca-timeline"><thead><tr><th>' . esc_html__( 'Ось', 'flavor-worldstat' )
+				. '</th><th>' . esc_html__( 'Балл 0–100', 'flavor-worldstat' )
+				. '</th><th>' . esc_html__( 'Уровень', 'flavor-worldstat' ) . '</th></tr></thead><tbody>';
+			foreach ( $axes as $row ) {
+				if ( ! is_array( $row ) ) {
+					continue;
+				}
+				echo '<tr><td>' . esc_html( (string) ( $row['axis'] ?? '' ) ) . '</td><td>'
+					. esc_html( (string) ( $row['score'] ?? '' ) ) . '</td><td>'
+					. esc_html( (string) ( $row['tier'] ?? '—' ) ) . '</td></tr>';
+			}
+			echo '</tbody></table>';
+		}
+		if ( ! empty( $payload['compare_hint'] ) ) {
+			echo '<p class="wsp-muted" style="margin:12px 0 0;">' . esc_html( (string) $payload['compare_hint'] );
+			if ( ! empty( $payload['compare_url'] ) ) {
+				echo ' <button type="button" class="wsp-btn-link" data-wsp-country-tab="compare">'
+					. esc_html__( 'Открыть вкладку «Сравнение»', 'flavor-worldstat' ) . '</button>';
+			}
+			echo '</p>';
+		}
+		echo '</div>';
+	}
+
+	private static function resolve_country_iso2( int $post_id ): string {
+		if ( class_exists( 'WorldStat_Country_CPT' ) && method_exists( 'WorldStat_Country_CPT', 'get_iso2_for_post' ) ) {
+			return strtoupper( (string) WorldStat_Country_CPT::get_iso2_for_post( $post_id ) );
+		}
+		$candidates = [ 'wsp_country_iso2', 'country_iso2', 'iso2' ];
+		foreach ( $candidates as $key ) {
+			$v = strtoupper( sanitize_text_field( (string) get_post_meta( $post_id, $key, true ) ) );
+			if ( strlen( $v ) === 2 ) {
+				return $v;
+			}
+		}
+		return '';
 	}
 
 	/**
@@ -263,6 +309,10 @@ class WorldStat_Country_Analysis {
 
 	private static function enqueue_assets( int $post_id ): void {
 		WorldStat_UI::enqueue_chart_scripts();
+
+		if ( class_exists( 'WSErgo_Country_Renderer' ) ) {
+			WSErgo_Country_Renderer::enqueue_public_assets();
+		}
 
 		wp_enqueue_style(
 			'worldstat-country-analytics',
@@ -292,21 +342,18 @@ class WorldStat_Country_Analysis {
 					'error'         => __( 'Ошибка', 'flavor-worldstat' ),
 					'done'          => __( 'Готово', 'flavor-worldstat' ),
 					'pickMetric'    => __( 'Выберите показатель.', 'flavor-worldstat' ),
-					'pickCluster'   => __( 'Отметьте хотя бы один показатель для кластеризации.', 'flavor-worldstat' ),
-					'pickEither'    => __( 'Выберите показатель и/или отметьте показатели для кластеризации.', 'flavor-worldstat' ),
 					'r2'            => __( 'R²', 'flavor-worldstat' ),
 					'trend'         => __( 'Тренд', 'flavor-worldstat' ),
 					'forecast'      => __( 'Прогноз', 'flavor-worldstat' ),
 					'year'          => __( 'год', 'flavor-worldstat' ),
 					'value'         => __( 'Значение', 'flavor-worldstat' ),
-					'cluster'       => __( 'Кластер', 'flavor-worldstat' ),
 					'years'         => __( 'Год', 'flavor-worldstat' ),
 					'period'        => __( 'Уровень', 'flavor-worldstat' ),
+					'axis'          => __( 'Ось', 'flavor-worldstat' ),
+					'score'         => __( 'Балл 0–100', 'flavor-worldstat' ),
+					'composite'     => __( 'Сводный балл', 'flavor-worldstat' ),
+					'compare'       => __( 'Сравнение стран', 'flavor-worldstat' ),
 					'networkError'  => __( 'Ошибка сети. Попробуйте снова.', 'flavor-worldstat' ),
-					'kHintDefault'  => __( 'Отметьте показатели ниже — k подберётся автоматически.', 'flavor-worldstat' ),
-					'kHintLoading'  => __( 'Подбор k…', 'flavor-worldstat' ),
-					'kHintApply'    => __( 'Подобрать k', 'flavor-worldstat' ),
-					'kRange'        => __( 'допустимо', 'flavor-worldstat' ),
 				],
 			]
 		);

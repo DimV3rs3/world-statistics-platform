@@ -42,7 +42,20 @@ if ( ! defined( 'ABSPATH' ) ) exit;
                 </thead>
                 <tbody>
                     <?php foreach ( $exts as $id => $ext ) :
-                        $has_tab   = isset( $tabs[ $id ] );
+                        $tab_labels = [];
+                        if ( isset( $tabs[ $id ]['title'] ) ) {
+                            $tab_labels[] = (string) $tabs[ $id ]['title'];
+                        }
+                        foreach ( $tabs as $tab_key => $tab_cfg ) {
+                            if ( ! is_array( $tab_cfg ) || $tab_key === $id ) {
+                                continue;
+                            }
+                            $tid = (string) ( $tab_cfg['id'] ?? $tab_key );
+                            if ( $tid === $tab_key ) {
+                                $tab_labels[] = (string) ( $tab_cfg['title'] ?? $tab_key );
+                            }
+                        }
+                        $tab_labels = array_values( array_unique( array_filter( $tab_labels ) ) );
                         $ext_layers = array_filter( $layers, fn( $l ) => $l['ext_id'] === $id );
                     ?>
                         <tr>
@@ -50,7 +63,13 @@ if ( ! defined( 'ABSPATH' ) ) exit;
                             <td><strong><?php echo esc_html( $ext['name'] ); ?></strong></td>
                             <td><?php echo esc_html( $ext['version'] ); ?></td>
                             <td><?php echo esc_html( $ext['author'] ); ?></td>
-                            <td><?php echo $has_tab ? '<span class="dashicons dashicons-yes-alt" style="color:green"></span>' : '—'; ?></td>
+                            <td><?php
+                            if ( ! empty( $tab_labels ) ) {
+                                echo esc_html( implode( ', ', $tab_labels ) );
+                            } else {
+                                echo '—';
+                            }
+                            ?></td>
                             <td><?php echo count( $ext_layers ); ?></td>
                             <td><?php echo esc_html( $ext['description'] ); ?></td>
                         </tr>

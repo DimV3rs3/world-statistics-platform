@@ -51,6 +51,19 @@
                     dataset.fill = true;
                 }
 
+                if (ds.borderDash && ds.borderDash.length) {
+                    dataset.borderDash = ds.borderDash;
+                }
+                if (ds.pointRadius !== undefined && ds.pointRadius !== null) {
+                    dataset.pointRadius = ds.pointRadius;
+                }
+                if (ds.pointHoverRadius !== undefined && ds.pointHoverRadius !== null) {
+                    dataset.pointHoverRadius = ds.pointHoverRadius;
+                }
+                if (ds.fill === false) {
+                    dataset.fill = false;
+                }
+
                 return dataset;
             });
 

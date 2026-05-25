@@ -15,7 +15,7 @@ class WorldStat_Extensions {
     /** @var array Data providers: "ext_id.metric" => [ 'callback' => callable, 'meta' => [] ] */
     private array $providers = [];
 
-    /** @var array Country tabs: ext_id => [ [ 'title', 'icon', 'callback', 'priority' ], ... ] */
+    /** @var array<string, array<string, array>> Country tabs: ext_id => tab_id => config */
     private array $tabs = [];
 
     /** @var array Map layers: ext_id => [ [ 'label', 'type', 'color_scale', 'data_callback' ], ... ] */
@@ -130,9 +130,29 @@ class WorldStat_Extensions {
     }
 
     public function _add_country_tab( string $ext_id, array $config ): void {
-        if ( ! isset( $this->extensions[ $ext_id ] ) ) return;
+        if ( ! isset( $this->extensions[ $ext_id ] ) ) {
+            return;
+        }
 
-        $this->tabs[ $ext_id ] = wp_parse_args( $config, [
+        // Явный id вкладки (например compare); иначе совпадает с ext_id (как у cities, ergonomics).
+        $tab_id = isset( $config['id'] ) ? sanitize_key( (string) $config['id'] ) : $ext_id;
+        if ( $tab_id === '' ) {
+            $tab_id = $ext_id;
+        }
+
+        if ( ! isset( $this->tabs[ $ext_id ] ) || ! is_array( $this->tabs[ $ext_id ] ) ) {
+            $this->tabs[ $ext_id ] = [];
+        }
+
+        // Обратная совместимость: старый формат — одна вкладка = плоский массив с title.
+        if ( isset( $this->tabs[ $ext_id ]['title'] ) ) {
+            $legacy_id = $ext_id;
+            $legacy    = $this->tabs[ $ext_id ];
+            $this->tabs[ $ext_id ] = [ $legacy_id => $legacy ];
+        }
+
+        $this->tabs[ $ext_id ][ $tab_id ] = wp_parse_args( $config, [
+            'id'       => $tab_id,
             'title'    => $this->extensions[ $ext_id ]['name'],
             'icon'     => $this->extensions[ $ext_id ]['icon'],
             'callback' => null,
@@ -229,8 +249,59 @@ class WorldStat_Extensions {
     public function get_providers(): array           { return $this->providers; }
     public function get_provider( string $key ): ?array { return $this->providers[ $key ] ?? null; }
 
-    public function get_tabs(): array                { return $this->tabs; }
-    public function get_tab( string $ext_id ): ?array { return $this->tabs[ $ext_id ] ?? null; }
+    /**
+     * Все вкладки: для каждой вкладки ключ = tab_id; для расширения с одной вкладкой также ключ ext_id.
+     *
+     * @return array<string, array>
+     */
+    public function get_tabs(): array {
+        $out = [];
+        foreach ( $this->tabs as $ext_id => $tab_group ) {
+            if ( ! is_array( $tab_group ) ) {
+                continue;
+            }
+            if ( isset( $tab_group['title'] ) ) {
+                $out[ $ext_id ] = $tab_group;
+                continue;
+            }
+            $primary = null;
+            foreach ( $tab_group as $tab_id => $config ) {
+                if ( ! is_array( $config ) ) {
+                    continue;
+                }
+                $out[ $tab_id ] = $config;
+                if ( null === $primary || (int) ( $config['priority'] ?? 50 ) < (int) ( $primary['priority'] ?? 50 ) ) {
+                    $primary = $config;
+                }
+            }
+            if ( $primary ) {
+                $out[ $ext_id ] = $primary;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Вкладка по slug (compare, ergonomics, cities…).
+     */
+    public function get_tab( string $tab_id ): ?array {
+        $tab_id = sanitize_key( $tab_id );
+        if ( $tab_id === '' ) {
+            return null;
+        }
+        foreach ( $this->tabs as $ext_id => $tab_group ) {
+            if ( ! is_array( $tab_group ) ) {
+                continue;
+            }
+            if ( isset( $tab_group['title'] ) && $ext_id === $tab_id ) {
+                return $tab_group;
+            }
+            if ( isset( $tab_group[ $tab_id ] ) && is_array( $tab_group[ $tab_id ] ) ) {
+                return $tab_group[ $tab_id ];
+            }
+        }
+        return null;
+    }
 
     public function get_layers(): array              { return $this->layers; }
     public function get_marker_layers(): array       { return $this->marker_layers; }

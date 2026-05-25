@@ -1,5 +1,5 @@
 /**
- * Country page analytics — regression, clustering, classification.
+ * Country page analytics — regression + ergonomics classification.
  */
 (function ($) {
 	'use strict';
@@ -47,103 +47,6 @@
 		$('#wsp-country-analysis-status').text(text || '');
 	}
 
-	var kClusterManual = false;
-	var kSuggestTimer = null;
-	var kSuggestXhr = null;
-
-	function setKClusterHint(text) {
-		$('#wsp-country-analysis-k-cluster-hint').text(text || '');
-	}
-
-	function scheduleSuggestClusterK() {
-		if (kSuggestTimer) {
-			clearTimeout(kSuggestTimer);
-		}
-		kSuggestTimer = setTimeout(suggestClusterK, 400);
-	}
-
-	function suggestClusterK(forceApply) {
-		var cfg = window.wspCountryAnalysis;
-		if (!cfg || !cfg.ajaxUrl) {
-			return;
-		}
-
-		var clusterIds = collectClusterMetricIds();
-		if (!clusterIds.length) {
-			setKClusterHint(i18n('kHintDefault', 'Отметьте показатели — k подберётся автоматически.'));
-			return;
-		}
-
-		if (kSuggestXhr && kSuggestXhr.abort) {
-			kSuggestXhr.abort();
-		}
-
-		setKClusterHint(i18n('kHintLoading', 'Подбор k…'));
-
-		kSuggestXhr = $.post(cfg.ajaxUrl, {
-			action: 'worldstat_suggest_country_cluster_k',
-			nonce: cfg.nonce,
-			post_id: cfg.postId,
-			cluster_category: $('#wsp-country-analysis-cluster-cat').val() || 'all',
-			cluster_metrics: clusterIds
-		})
-			.done(function (res) {
-				if (!res || !res.success || !res.data) {
-					var msg = (res && res.data && res.data.message) ? res.data.message : '';
-					setKClusterHint(msg || i18n('kHintDefault', ''));
-					return;
-				}
-				var data = res.data;
-				var hint = data.message || '';
-				if (data.k_max && data.k) {
-					hint += ' (' + i18n('kRange', 'допустимо') + ' 2–' + data.k_max + ')';
-				}
-				setKClusterHint(hint);
-				if (data.k && (forceApply || !kClusterManual)) {
-					$('#wsp-country-analysis-k-cluster').val(data.k);
-				}
-			})
-			.fail(function (xhr) {
-				if (xhr && xhr.statusText === 'abort') {
-					return;
-				}
-				setKClusterHint(ajaxErrorMessage(xhr, i18n('kHintDefault', '')));
-			});
-	}
-
-	function filterClusterPicks() {
-		var cat = $('#wsp-country-analysis-cluster-cat').val() || 'all';
-		$('#wsp-cluster-metric-picks .wsp-ca-metric-pick').each(function () {
-			var $el = $(this);
-			var show = cat === 'all' || $el.data('category') === cat;
-			$el.toggle(show);
-		});
-	}
-
-	function setVisibleClusterChecks(checked) {
-		var cat = $('#wsp-country-analysis-cluster-cat').val() || 'all';
-		$('#wsp-cluster-metric-picks .wsp-ca-metric-pick').each(function () {
-			var $el = $(this);
-			if (!$el.is(':visible')) {
-				return;
-			}
-			if (cat === 'all' || $el.data('category') === cat) {
-				$el.find('input[type="checkbox"]').prop('checked', !!checked);
-			}
-		});
-	}
-
-	function collectClusterMetricIds() {
-		var ids = [];
-		$('#wsp-cluster-metric-picks input[type="checkbox"]:checked').each(function () {
-			var v = $(this).val();
-			if (v) {
-				ids.push(v);
-			}
-		});
-		return ids;
-	}
-
 	function renderChart($container, chartCfg) {
 		if (!chartCfg) {
 			return;
@@ -188,15 +91,6 @@
 		tryRender(0);
 	}
 
-	function renderCharts($block, charts) {
-		if (!charts || !charts.length) {
-			return;
-		}
-		charts.forEach(function (c) {
-			renderChart($block, c);
-		});
-	}
-
 	function blockShell(title, desc) {
 		var html = '<article class="wsp-ca-block">';
 		html += '<h4 class="wsp-ca-block__title">' + esc(title) + '</h4>';
@@ -227,26 +121,6 @@
 		renderChart($b, data.chart);
 	}
 
-	function renderClustering($root, data) {
-		var $b = blockShell(data.title, data.description);
-		if (!data.ok) {
-			$b.append('<p class="wsp-ca-notice">' + esc(data.message) + '</p>');
-			$root.append($b);
-			return;
-		}
-		var $ul = $('<ul class="wsp-ca-groups"></ul>');
-		(data.groups || []).forEach(function (group, idx) {
-			if (!group || !group.length) {
-				return;
-			}
-			$ul.append('<li><strong>' + esc(i18n('cluster', 'Кластер') + ' ' + (idx + 1)) + ':</strong> '
-				+ esc(group.join(', ')) + '</li>');
-		});
-		$b.append($ul);
-		$root.append($b);
-		renderCharts($b, data.charts);
-	}
-
 	function renderClassification($root, data) {
 		var $b = blockShell(data.title, data.description);
 		if (!data.ok) {
@@ -254,20 +128,39 @@
 			$root.append($b);
 			return;
 		}
-		var rows = data.timeline || [];
-		if (rows.length) {
+
+		var slug = data.tier_slug || '';
+		var tierHtml = '<p class="wsp-ca-ergo-tier"><span class="wsergo-tier-badge wsergo-tier-badge--' + esc(slug) + '">'
+			+ esc(data.tier_label) + '</span>';
+		if (data.composite) {
+			tierHtml += ' <span class="wsp-muted">(' + esc(i18n('composite', 'Сводный балл')) + ': '
+				+ esc(data.composite) + ')</span>';
+		}
+		tierHtml += '</p>';
+		$b.append(tierHtml);
+
+		var axes = data.axes || [];
+		if (axes.length) {
 			var tbl = '<table class="wsp-ca-timeline"><thead><tr><th>'
-				+ esc(i18n('years', 'Год')) + '</th><th>'
-				+ esc(i18n('value', 'Значение')) + '</th><th>'
-				+ esc(i18n('period', 'Уровень')) + '</th></tr></thead><tbody>';
-			rows.forEach(function (r) {
-				tbl += '<tr><td>' + esc(r.year) + '</td><td>' + esc(r.value) + '</td><td>' + esc(r.period) + '</td></tr>';
+				+ esc(i18n('axis', 'Ось')) + '</th><th>'
+				+ esc(i18n('score', 'Балл 0–100')) + '</th></tr></thead><tbody>';
+			axes.forEach(function (r) {
+				tbl += '<tr><td>' + esc(r.axis) + '</td><td>' + esc(r.score) + '</td></tr>';
 			});
 			tbl += '</tbody></table>';
 			$b.append(tbl);
 		}
+
+		if (data.compare_hint) {
+			var hint = '<p class="wsp-muted wsp-ca-compare-hint">' + esc(data.compare_hint);
+			if (data.compare_url) {
+				hint += ' <a href="' + esc(data.compare_url) + '">' + esc(i18n('compare', 'Сравнение стран')) + '</a>';
+			}
+			hint += '</p>';
+			$b.append(hint);
+		}
+
 		$root.append($b);
-		renderCharts($b, data.charts);
 	}
 
 	function renderResults(payload) {
@@ -278,7 +171,6 @@
 			return;
 		}
 		renderRegression($root, payload.regression || {});
-		renderClustering($root, payload.clustering || {});
 		renderClassification($root, payload.classification || {});
 	}
 
@@ -289,12 +181,10 @@
 		}
 
 		var metricId = $('#wsp-country-analysis-metric').val() || '';
-		var clusterIds = collectClusterMetricIds();
-
-		if (!metricId && !clusterIds.length) {
-			setStatus(i18n('pickEither', 'Выберите показатель и/или отметьте показатели для кластеризации.'));
+		if (!metricId) {
+			setStatus(i18n('pickMetric', 'Выберите показатель.'));
 			$('#wsp-country-analysis-results').html(
-				'<p class="wsp-ca-notice">' + esc(i18n('pickEither', 'Выберите показатель и/или отметьте показатели.')) + '</p>'
+				'<p class="wsp-ca-notice">' + esc(i18n('pickMetric', 'Выберите показатель.')) + '</p>'
 			);
 			return;
 		}
@@ -307,11 +197,7 @@
 			action: 'worldstat_run_country_analysis',
 			nonce: cfg.nonce,
 			post_id: cfg.postId,
-			metric_id: metricId,
-			k_cluster: parseInt($('#wsp-country-analysis-k-cluster').val(), 10) || 3,
-			k_classify: parseInt($('#wsp-country-analysis-k-classify').val(), 10) || 3,
-			cluster_category: $('#wsp-country-analysis-cluster-cat').val() || 'all',
-			cluster_metrics: clusterIds
+			metric_id: metricId
 		})
 			.done(function (res) {
 				if (res && res.success && res.data) {
@@ -337,31 +223,6 @@
 		if (!$('#wsp-country-analytics').length) {
 			return;
 		}
-
-		filterClusterPicks();
-
-		$('#wsp-country-analysis-cluster-cat').on('change', function () {
-			filterClusterPicks();
-			scheduleSuggestClusterK();
-		});
-		$('#wsp-cluster-metric-picks').on('change', 'input[type="checkbox"]', scheduleSuggestClusterK);
-		$('#wsp-cluster-select-visible').on('click', function () {
-			setVisibleClusterChecks(true);
-			scheduleSuggestClusterK();
-		});
-		$('#wsp-cluster-clear-visible').on('click', function () {
-			setVisibleClusterChecks(false);
-			setKClusterHint(i18n('kHintDefault', 'Отметьте показатели — k подберётся автоматически.'));
-		});
-
-		$('#wsp-country-analysis-k-cluster').on('input', function () {
-			kClusterManual = true;
-		});
-		$('#wsp-country-analysis-k-cluster-tune').on('click', function () {
-			kClusterManual = false;
-			suggestClusterK(true);
-		});
-
 		$('#wsp-country-analysis-run').on('click', runAnalysis);
 	});
 }(jQuery));
