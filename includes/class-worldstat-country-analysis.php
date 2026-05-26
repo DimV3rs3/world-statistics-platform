@@ -74,11 +74,15 @@ class WorldStat_Country_Analysis {
 		echo '<select id="wsp-country-analysis-metric" class="wsp-select">';
 		echo '<option value="">' . esc_html__( '— выберите показатель —', 'flavor-worldstat' ) . '</option>';
 		foreach ( $chartable as $item ) {
-			$mid = (string) ( $item['metric_id'] ?? $item['slug'] ?? '' );
+			$mid   = (string) ( $item['metric_id'] ?? $item['slug'] ?? '' );
+			$slug  = (string) ( $item['slug'] ?? '' );
+			$label = class_exists( 'WorldStat_Data' )
+				? WorldStat_Data::resolve_metric_label( 'csv-country-meta', $slug, (string) ( $item['label'] ?? '' ) )
+				: (string) ( $item['label'] ?? $mid );
 			printf(
 				'<option value="%s">%s</option>',
 				esc_attr( $mid ),
-				esc_html( (string) ( $item['label'] ?? $mid ) )
+				esc_html( $label !== '' ? $label : $mid )
 			);
 		}
 		echo '</select>';
@@ -275,9 +279,9 @@ class WorldStat_Country_Analysis {
 
 	private static function resolve_country_iso2( int $post_id ): string {
 		if ( class_exists( 'WorldStat_Country_CPT' ) && method_exists( 'WorldStat_Country_CPT', 'get_iso2_for_post' ) ) {
-			return strtoupper( (string) WorldStat_Country_CPT::get_iso2_for_post( $post_id ) );
+			return WorldStat_Country_CPT::get_iso2_for_post( $post_id );
 		}
-		$candidates = [ 'wsp_country_iso2', 'country_iso2', 'iso2' ];
+		$candidates = [ 'wsp_iso_alpha2', 'wsp_country_iso2', 'country_iso2', 'iso2' ];
 		foreach ( $candidates as $key ) {
 			$v = strtoupper( sanitize_text_field( (string) get_post_meta( $post_id, $key, true ) ) );
 			if ( strlen( $v ) === 2 ) {

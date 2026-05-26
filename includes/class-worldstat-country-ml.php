@@ -60,10 +60,14 @@ class WorldStat_Country_ML {
 			}
 			ksort( $series, SORT_NUMERIC );
 			$slug      = sanitize_key( (string) ( $item['slug'] ?? '' ) );
+			$raw_label = (string) ( $item['label'] ?? $slug );
+			$label     = class_exists( 'WorldStat_Data' )
+				? WorldStat_Data::resolve_metric_label( 'csv-country-meta', $slug, $raw_label )
+				: $raw_label;
 			$metrics[] = [
 				'id'       => (string) ( $item['metric_id'] ?? $slug ),
 				'slug'     => $slug,
-				'label'    => (string) ( $item['label'] ?? $slug ),
+				'label'    => $label !== '' ? $label : $slug,
 				'category' => WorldStat_Data::metric_category_from_slug( $slug ),
 				'series'   => $series,
 			];

@@ -157,29 +157,138 @@ class WorldStat_Data {
             return $known_csv_labels[ $slug ];
         }
 
-        if ( $slug !== '' ) {
-            if ( class_exists( 'WSErgo_Country_Macro_Calculator' ) ) {
-                $translated = WSErgo_Country_Macro_Calculator::data_label_ru( $slug );
-                if ( is_string( $translated ) && $translated !== '' && $translated !== $slug ) {
+        $from_admin = self::lookup_ergo_metric_label_ru( $slug, $fallback );
+        if ( $from_admin !== '' ) {
+            return $from_admin;
+        }
+
+        if ( $slug !== '' && class_exists( 'WSErgo_Country_Macro_Calculator' ) ) {
+            foreach ( self::metric_label_lookup_candidates( $slug, $fallback ) as $try_slug ) {
+                $translated = WSErgo_Country_Macro_Calculator::data_label_ru( $try_slug );
+                if ( is_string( $translated ) && $translated !== '' && $translated !== '—' && self::ergo_label_is_dictionary_hit( $try_slug, $translated ) ) {
                     return $translated;
                 }
-            } elseif ( class_exists( 'WSErgo_Settings' ) ) {
-                $map = get_option( WSErgo_Settings::OPTION_DATA_LABELS_RU, [] );
-                if ( is_array( $map ) && ! empty( $map[ $slug ] ) ) {
-                    return (string) $map[ $slug ];
-                }
             }
+        } elseif ( $slug !== '' && class_exists( 'WSErgo_Settings' ) ) {
+            $map = WSErgo_Settings::get_data_labels_ru();
+            if ( ! empty( $map[ $slug ] ) ) {
+                return (string) $map[ $slug ];
+            }
+        }
+
+        if ( $fallback !== '' && self::looks_like_russian_label( $fallback ) ) {
+            return $fallback;
+        }
+
+        if ( $slug === '' ) {
+            return $fallback !== '' ? $fallback : __( 'Показатель', 'flavor-worldstat' );
         }
 
         if ( $fallback !== '' ) {
             return $fallback;
         }
 
-        if ( $slug === '' ) {
-            return __( 'Показатель', 'flavor-worldstat' );
+        return self::humanize_metric_label( $slug );
+    }
+
+    /**
+     * Ключи для поиска в словаре «Переводы» / подписях эргономики.
+     *
+     * @return list<string>
+     */
+    public static function metric_label_lookup_candidates( string $slug, string $fallback_label = '' ): array {
+        $candidates = [];
+        $slug       = sanitize_key( $slug );
+        if ( $slug !== '' ) {
+            $candidates[] = $slug;
         }
 
-        return self::humanize_metric_label( $slug );
+        $fallback = trim( $fallback_label );
+        if ( $fallback !== '' ) {
+            $fb_key = sanitize_key( $fallback );
+            if ( $fb_key !== '' ) {
+                $candidates[] = $fb_key;
+            }
+            $from_label = strtolower( preg_replace( '/[^a-z0-9]+/i', '_', $fallback ) );
+            $from_label = trim( (string) $from_label, '_' );
+            if ( $from_label !== '' ) {
+                $candidates[] = sanitize_key( $from_label );
+            }
+        }
+
+        $expanded = [];
+        foreach ( $candidates as $c ) {
+            $expanded[] = $c;
+            if ( class_exists( 'WSErgo_Country_Macro_Calculator' ) ) {
+                foreach ( WSErgo_Country_Macro_Calculator::data_label_ru_candidate_keys( $c ) as $variant ) {
+                    $expanded[] = $variant;
+                }
+            }
+        }
+
+        return array_values( array_unique( array_filter( $expanded ) ) );
+    }
+
+    /**
+     * Подпись из опции «Переводы» / таблицы подписей эргономики (без auto-humanize).
+     */
+    public static function lookup_ergo_metric_label_ru( string $slug, string $fallback_label = '' ): string {
+        $candidates = self::metric_label_lookup_candidates( $slug, $fallback_label );
+        $slug       = sanitize_key( $slug );
+
+        if ( class_exists( 'WSErgo_Settings' ) ) {
+            $custom = WSErgo_Settings::get_data_labels_ru();
+            foreach ( $candidates as $try ) {
+                if ( ! empty( $custom[ $try ] ) ) {
+                    return (string) $custom[ $try ];
+                }
+            }
+            if ( $slug !== '' ) {
+                foreach ( $custom as $key => $label ) {
+                    if ( $label === '' ) {
+                        continue;
+                    }
+                    if ( $key === $slug || str_starts_with( $key, $slug . '__' ) ) {
+                        return (string) $label;
+                    }
+                }
+            }
+        }
+
+        if ( class_exists( 'WSErgo_Country_Macro_Calculator' ) ) {
+            $defaults = WSErgo_Country_Macro_Calculator::macro_signal_ru_defaults();
+            foreach ( $candidates as $try ) {
+                if ( ! empty( $defaults[ $try ] ) ) {
+                    return (string) $defaults[ $try ];
+                }
+            }
+            if ( $slug !== '' ) {
+                foreach ( $defaults as $key => $label ) {
+                    if ( $label === '' ) {
+                        continue;
+                    }
+                    if ( $key === $slug || str_starts_with( $key, $slug . '__' ) ) {
+                        return (string) $label;
+                    }
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * data_label_ru вернул запись словаря, а не только humanize slug.
+     */
+    private static function ergo_label_is_dictionary_hit( string $slug, string $label ): bool {
+        if ( $label === '' || $label === '—' ) {
+            return false;
+        }
+        return self::lookup_ergo_metric_label_ru( $slug, '' ) === $label;
+    }
+
+    private static function looks_like_russian_label( string $label ): bool {
+        return (bool) preg_match( '/[а-яёА-ЯЁ]/u', $label );
     }
 
     /**

@@ -73,6 +73,26 @@ class WorldStat_Country_CPT {
     }
 
     /**
+     * ISO Alpha-2 для записи страны.
+     */
+    public static function get_iso2_for_post( int $post_id ): string {
+        if ( $post_id < 1 ) {
+            return '';
+        }
+        $iso2 = strtoupper( trim( (string) get_post_meta( $post_id, 'wsp_iso_alpha2', true ) ) );
+        if ( strlen( $iso2 ) === 2 ) {
+            return $iso2;
+        }
+        foreach ( [ 'wsp_country_iso2', 'country_iso2', 'iso2' ] as $key ) {
+            $v = strtoupper( trim( (string) get_post_meta( $post_id, $key, true ) ) );
+            if ( strlen( $v ) === 2 ) {
+                return $v;
+            }
+        }
+        return '';
+    }
+
+    /**
      * ID поста страны без get_post(): для массовых чтений meta (рейтинги, карты).
      */
     public static function get_post_id_by_code( string $iso2 ): int {
