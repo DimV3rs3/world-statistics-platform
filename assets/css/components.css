@@ -50,6 +50,20 @@
     gap: 8px;
 }
 
+.wsp-stat-value .wsergo-tier-badge {
+    font-size: 15px;
+    padding: 6px 14px;
+}
+
+.wsp-stat-value-sub {
+    display: block;
+    width: 100%;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--wsp-gray-500);
+    margin-top: 2px;
+}
+
 .wsp-stat-badge {
     display: inline-block;
     font-size: 12px;

@@ -15,14 +15,26 @@ $cols = $opts['columns'] ?? 4;
             <span class="wsp-stat-icon dashicons dashicons-<?php echo esc_attr( $item['icon'] ); ?>"></span>
         <?php endif; ?>
         <?php
-        $badge_slug  = ! empty( $item['badge_slug'] ) ? sanitize_key( (string) $item['badge_slug'] ) : '';
-        $badge_class = 'wsp-stat-badge' . ( $badge_slug !== '' ? ' wsp-stat-badge--' . $badge_slug : '' );
-        $value_class = 'wsp-stat-value' . ( ! empty( $item['badge'] ) ? ' wsp-stat-value--with-badge' : '' );
+        $badge_slug      = ! empty( $item['badge_slug'] ) ? sanitize_key( (string) $item['badge_slug'] ) : '';
+        $value_tier_slug = ! empty( $item['value_tier_slug'] ) ? sanitize_key( (string) $item['value_tier_slug'] ) : '';
+        $badge_class     = 'wsp-stat-badge' . ( $badge_slug !== '' ? ' wsp-stat-badge--' . $badge_slug : '' );
+        $value_class     = 'wsp-stat-value';
+        if ( ! empty( $item['badge'] ) || $value_tier_slug !== '' || ! empty( $item['value_sub'] ) ) {
+            $value_class .= ' wsp-stat-value--with-badge';
+        }
+        $value_title = ! empty( $item['badge_title'] ) ? (string) $item['badge_title'] : '';
         ?>
         <span class="<?php echo esc_attr( $value_class ); ?>">
-            <?php echo esc_html( $item['value'] ?? '' ); ?>
+            <?php if ( $value_tier_slug !== '' ) : ?>
+                <span class="wsergo-tier-badge wsergo-tier-badge--<?php echo esc_attr( $value_tier_slug ); ?>"<?php echo $value_title !== '' ? ' title="' . esc_attr( $value_title ) . '"' : ''; ?>><?php echo esc_html( (string) ( $item['value'] ?? '' ) ); ?></span>
+            <?php else : ?>
+                <?php echo esc_html( $item['value'] ?? '' ); ?>
+            <?php endif; ?>
             <?php if ( ! empty( $item['badge'] ) ) : ?>
                 <span class="<?php echo esc_attr( $badge_class ); ?>"><?php echo esc_html( (string) $item['badge'] ); ?></span>
+            <?php endif; ?>
+            <?php if ( ! empty( $item['value_sub'] ) ) : ?>
+                <span class="wsp-stat-value-sub"><?php echo esc_html( (string) $item['value_sub'] ); ?></span>
             <?php endif; ?>
         </span>
         <span class="wsp-stat-label"><?php echo esc_html( $item['label'] ?? '' ); ?></span>

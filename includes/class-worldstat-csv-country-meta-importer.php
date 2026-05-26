@@ -577,81 +577,13 @@ class WorldStat_Csv_Country_Meta_Importer {
 		self::bump_import_revision();
 	}
 
-	/**
-	 * Вкладка страницы: таблицы год — значение по каждому wsp_metric_*.
-	 *
-	 * @param string $country_code ISO2.
-	 */
-	public static function render_country_tab( string $country_code ): void {
-		$post = WorldStat_Country_CPT::get_by_code( $country_code );
-		if ( ! $post ) {
-			echo '<p class="wsp-muted">' . esc_html__( 'Страна не найдена.', 'flavor-worldstat' ) . '</p>';
-			return;
-		}
-
-		global $wpdb;
-		$like = $wpdb->esc_like( self::META_PREFIX ) . '%';
-		$keys = $wpdb->get_col(
-			$wpdb->prepare(
-				"SELECT meta_key FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key LIKE %s ORDER BY meta_key ASC",
-				$post->ID,
-				$like
-			)
-		);
-
-		if ( empty( $keys ) ) {
-			echo '<p class="wsp-muted">' . esc_html__( 'Нет показателей, импортированных из CSV.', 'flavor-worldstat' ) . '</p>';
-			return;
-		}
-
-		foreach ( $keys as $meta_key ) {
-			$data = get_post_meta( $post->ID, $meta_key, true );
-			if ( ! is_array( $data ) || empty( $data ) ) {
-				continue;
-			}
-
-			$slug  = substr( (string) $meta_key, strlen( self::META_PREFIX ) );
-			$title = self::human_label_for_slug( $slug );
-
-			$rows = array();
-			ksort( $data, SORT_NUMERIC );
-			foreach ( $data as $y => $v ) {
-				$yi = (int) $y;
-				if ( $yi <= 0 || ! is_numeric( $v ) ) {
-					continue;
-				}
-				$rows[] = array( (string) $yi, self::format_number( (float) $v ) );
-			}
-
-			if ( empty( $rows ) ) {
-				continue;
-			}
-
-			echo '<section class="wsp-csv-metric-tab-block" style="margin-bottom:24px;">';
-			echo '<h3 style="margin:0 0 10px;">' . esc_html( $title ) . '</h3>';
-			echo '<div class="wsp-table-wrap"><table class="wsp-data-table"><thead><tr>';
-			echo '<th>' . esc_html__( 'Год', 'flavor-worldstat' ) . '</th>';
-			echo '<th>' . esc_html__( 'Значение', 'flavor-worldstat' ) . '</th>';
-			echo '</tr></thead><tbody>';
-			foreach ( $rows as $r ) {
-				echo '<tr><td>' . esc_html( $r[0] ) . '</td><td>' . esc_html( $r[1] ) . '</td></tr>';
-			}
-			echo '</tbody></table></div>';
-			echo '</section>';
-		}
-	}
-
 	public static function human_label_for_slug( string $slug ): string {
 		return WorldStat_Data::resolve_metric_label( 'csv-country-meta', $slug, '' );
 	}
 
-	private static function format_number( float $value ): string {
-		$precision = abs( $value - round( $value ) ) < 0.00001 ? 0 : 3;
-		return number_format( $value, $precision, '.', ' ' );
-	}
-
 	/**
-	 * Регистрация «расширения» и вкладки на странице страны (вызывать с хука worldstat_init).
+	 * Регистрация расширения и провайдеров метрик (рейтинги, карта, обзор).
+	 * Вкладка на странице страны отключена — данные CSV на вкладке «Обзор».
 	 */
 	public static function register_extension(): void {
 		if ( ! class_exists( 'WorldStat_Extensions' ) ) {
@@ -664,16 +596,6 @@ class WorldStat_Csv_Country_Meta_Importer {
 				'name'        => __( 'Показатели из CSV', 'flavor-worldstat' ),
 				'version'     => '1.0.0',
 				'description' => __( 'Временные ряды, импортированные из загруженных CSV, в мета полях стран.', 'flavor-worldstat' ),
-			)
-		);
-
-		WorldStat_Extensions::add_country_tab(
-			'csv-country-meta',
-			array(
-				'title'    => __( 'Показатели CSV', 'flavor-worldstat' ),
-				'icon'     => 'dashicons-chart-area',
-				'priority' => 36,
-				'callback' => array( self::class, 'render_country_tab' ),
 			)
 		);
 
