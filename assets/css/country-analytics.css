@@ -198,13 +198,19 @@
 	padding: 16px 18px;
 }
 
-.wsp-ca-block {
-	margin-bottom: 22px;
-	padding-bottom: 18px;
-	border-bottom: 1px dashed var(--wsp-gray-200, #e5e7eb);
+.wsp-country-analytics__ergo {
+	margin-bottom: 14px;
 }
 
-.wsp-ca-block:last-child {
+.wsp-ca-ergo-tier {
+	margin: 0 0 10px;
+}
+
+.wsp-country-analytics .wsergo-tier-badge:empty {
+	display: none;
+}
+
+.wsp-ca-block {
 	margin-bottom: 0;
 	padding-bottom: 0;
 	border-bottom: none;
@@ -264,6 +270,11 @@
 
 .wsp-ca-chart {
 	margin-top: 12px;
+	margin-bottom: 0;
+}
+
+.wsp-country-analytics__results .wsp-ca-chart .wsp-chart-canvas-wrap {
+	margin-bottom: 0;
 }
 
 .wsp-ca-chart .wsp-chart-subtitle {

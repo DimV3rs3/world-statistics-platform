@@ -1,5 +1,5 @@
 /**
- * Country page analytics — regression + ergonomics classification.
+ * Country page analytics — regression chart (ergonomics classification is static above).
  */
 (function ($) {
 	'use strict';
@@ -54,7 +54,7 @@
 		chartSeq += 1;
 		var id = 'wsp-ca-chart-' + chartSeq;
 		var h = chartCfg.height || 260;
-		var html = '<div class="wsp-ca-chart wsp-chart-wrap">';
+		var html = '<div class="wsp-ca-chart">';
 		if (chartCfg.title) {
 			html += '<h4 class="wsp-chart-title">' + esc(chartCfg.title) + '</h4>';
 		}
@@ -119,48 +119,7 @@
 		$b.append(html);
 		$root.append($b);
 		renderChart($b, data.chart);
-	}
-
-	function renderClassification($root, data) {
-		var $b = blockShell(data.title, data.description);
-		if (!data.ok) {
-			$b.append('<p class="wsp-ca-notice">' + esc(data.message) + '</p>');
-			$root.append($b);
-			return;
-		}
-
-		var slug = data.tier_slug || '';
-		var tierHtml = '<p class="wsp-ca-ergo-tier"><span class="wsergo-tier-badge wsergo-tier-badge--' + esc(slug) + '">'
-			+ esc(data.tier_label) + '</span>';
-		if (data.composite) {
-			tierHtml += ' <span class="wsp-muted">(' + esc(i18n('composite', 'Сводный балл')) + ': '
-				+ esc(data.composite) + ')</span>';
-		}
-		tierHtml += '</p>';
-		$b.append(tierHtml);
-
-		var axes = data.axes || [];
-		if (axes.length) {
-			var tbl = '<table class="wsp-ca-timeline"><thead><tr><th>'
-				+ esc(i18n('axis', 'Ось')) + '</th><th>'
-				+ esc(i18n('score', 'Балл 0–100')) + '</th></tr></thead><tbody>';
-			axes.forEach(function (r) {
-				tbl += '<tr><td>' + esc(r.axis) + '</td><td>' + esc(r.score) + '</td></tr>';
-			});
-			tbl += '</tbody></table>';
-			$b.append(tbl);
-		}
-
-		if (data.compare_hint) {
-			var hint = '<p class="wsp-muted wsp-ca-compare-hint">' + esc(data.compare_hint);
-			if (data.compare_url) {
-				hint += ' <a href="' + esc(data.compare_url) + '">' + esc(i18n('compare', 'Сравнение стран')) + '</a>';
-			}
-			hint += '</p>';
-			$b.append(hint);
-		}
-
-		$root.append($b);
+		$root.find('.wsergo-tier-badge:empty').remove();
 	}
 
 	function renderResults(payload) {
@@ -171,7 +130,6 @@
 			return;
 		}
 		renderRegression($root, payload.regression || {});
-		renderClassification($root, payload.classification || {});
 	}
 
 	function runAnalysis() {

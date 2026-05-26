@@ -64,7 +64,7 @@ class WorldStat_Country_Analysis {
 		echo '<div class="wsp-ca-settings">';
 
 		echo '<div class="wsp-ca-settings__section">';
-		echo '<span class="wsp-ca-settings__legend">' . esc_html__( 'Регрессия и классификация', 'flavor-worldstat' ) . '</span>';
+		echo '<span class="wsp-ca-settings__legend">' . esc_html__( 'Регрессия', 'flavor-worldstat' ) . '</span>';
 		echo '<div class="wsp-ca-settings__row wsp-ca-settings__row--regression">';
 
 		echo '<div class="wsp-ca-control wsp-ca-control--metric">';
@@ -134,8 +134,7 @@ class WorldStat_Country_Analysis {
 			self::send_json_error( [ 'message' => (string) ( $result['error'] ?? __( 'Анализ недоступен.', 'flavor-worldstat' ) ) ] );
 		}
 
-		unset( $result['clustering'] );
-		$result['classification'] = self::build_ergo_classification_payload( $post_id );
+		unset( $result['clustering'], $result['classification'] );
 
 		self::send_json_success( $result );
 	}
@@ -237,12 +236,14 @@ class WorldStat_Country_Analysis {
 		if ( ! empty( $payload['description'] ) ) {
 			echo '<p class="wsp-muted" style="margin:0 0 10px;">' . esc_html( (string) $payload['description'] ) . '</p>';
 		}
-		echo '<p class="wsp-ca-ergo-tier"><span class="wsergo-tier-badge wsergo-tier-badge--' . esc_attr( $slug ) . '">'
+		echo '<div class="wsp-ca-ergo-tier">';
+		echo '<span class="wsergo-tier-badge wsergo-tier-badge--' . esc_attr( $slug ) . '">'
 			. esc_html( (string) ( $payload['tier_label'] ?? '' ) ) . '</span>';
 		if ( ! empty( $payload['composite'] ) ) {
 			echo ' <span class="wsp-muted">(' . esc_html__( 'Взвешенный балл', 'flavor-worldstat' ) . ': '
 				. esc_html( (string) $payload['composite'] ) . ')</span>';
 		}
+		echo '</div>';
 		if ( ! empty( $payload['tier_reason'] ) ) {
 			echo '<p class="wsp-muted" style="margin:6px 0 0;">' . esc_html( (string) $payload['tier_reason'] ) . '</p>';
 		}
@@ -250,7 +251,6 @@ class WorldStat_Country_Analysis {
 			echo '<p class="wsp-muted" style="margin:4px 0 0;">' . esc_html__( 'Профиль', 'flavor-worldstat' ) . ': '
 				. esc_html( (string) $payload['cluster_label'] ) . '</p>';
 		}
-		echo '</p>';
 		$axes = isset( $payload['axes'] ) && is_array( $payload['axes'] ) ? $payload['axes'] : array();
 		if ( ! empty( $axes ) ) {
 			echo '<table class="wsp-ca-timeline"><thead><tr><th>' . esc_html__( 'Ось', 'flavor-worldstat' )
