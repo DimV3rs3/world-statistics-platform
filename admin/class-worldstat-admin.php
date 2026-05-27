@@ -9,6 +9,12 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class WorldStat_Admin {
 
+    /** Страница «Данные CSV» платформы (страны, мета, расчёты). */
+    public const SLUG_CSV_DATA = 'wsp-csv-data';
+
+    /** Slug импорта CSV плагина зон (WorldStat — Room Zones); не регистрировать повторно. */
+    public const SLUG_CSV_ZONES = 'worldstat-csv';
+
     private WorldStat_Extensions $extensions;
 
     public function __construct( WorldStat_Extensions $extensions ) {
@@ -17,6 +23,7 @@ class WorldStat_Admin {
         // Priority 5 — register BEFORE extensions (default priority 10)
         add_action( 'admin_menu', [ $this, 'register_menus' ], 5 );
         // CSV upload/delete must run before admin-header (redirect); page callback runs too late.
+        add_action( 'admin_init', [ $this, 'maybe_redirect_legacy_platform_csv_page' ], 0 );
         add_action( 'admin_init', [ $this, 'handle_csv_admin_post' ], 0 );
         add_action( 'admin_init', [ $this, 'handle_csv_translations_post' ], 0 );
         add_action( 'admin_init', [ $this, 'maybe_redirect_stale_csv_error' ], 1 );
@@ -49,8 +56,8 @@ class WorldStat_Admin {
         // Extensions Manager
         add_submenu_page( 'worldstat', 'Расширения', 'Расширения', 'manage_options', 'worldstat-extensions', [ $this, 'page_extensions' ] );
 
-        // User CSV uploads
-        add_submenu_page( 'worldstat', 'Данные CSV', 'Данные CSV', 'manage_options', 'worldstat-csv', [ $this, 'page_csv_data' ] );
+        // User CSV uploads (отдельный slug — плагин зон использует worldstat-csv).
+        add_submenu_page( 'worldstat', 'Данные CSV', 'Данные CSV', 'manage_options', self::SLUG_CSV_DATA, [ $this, 'page_csv_data' ] );
         add_submenu_page( 'worldstat', __( 'Переводы показателей', 'flavor-worldstat' ), __( 'Переводы', 'flavor-worldstat' ), 'manage_options', 'worldstat-csv-translations', [ $this, 'page_csv_translations' ] );
 
         // Settings
@@ -63,11 +70,38 @@ class WorldStat_Admin {
         register_setting( 'wsp_settings', 'wsp_enable_rest_public', [ 'type' => 'boolean', 'default' => true ] );
     }
 
+    public static function csv_data_admin_url( array $args = [] ): string {
+        return add_query_arg( $args, admin_url( 'admin.php?page=' . self::SLUG_CSV_DATA ) );
+    }
+
+    public static function is_zones_csv_plugin_active(): bool {
+        return class_exists( 'WSZ_Admin', false );
+    }
+
+    /**
+     * Старые закладки admin.php?page=worldstat-csv вели на платформу; при активных зонах slug занят импортом зон.
+     */
+    public function maybe_redirect_legacy_platform_csv_page(): void {
+        if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+        if ( ! isset( $_GET['page'] ) || sanitize_text_field( wp_unslash( $_GET['page'] ) ) !== self::SLUG_CSV_ZONES ) {
+            return;
+        }
+        if ( self::is_zones_csv_plugin_active() ) {
+            return;
+        }
+        $args = wp_unslash( $_GET );
+        unset( $args['page'] );
+        wp_safe_redirect( self::csv_data_admin_url( is_array( $args ) ? $args : [] ) );
+        exit;
+    }
+
     /**
      * Drop ?wsp_csv_msg=error from URL after the flash message was already shown (avoid bogus notice on refresh).
      */
     public function maybe_redirect_stale_csv_error(): void {
-        if ( ! isset( $_GET['page'] ) || sanitize_text_field( wp_unslash( $_GET['page'] ) ) !== 'worldstat-csv' ) {
+        if ( ! isset( $_GET['page'] ) || sanitize_text_field( wp_unslash( $_GET['page'] ) ) !== self::SLUG_CSV_DATA ) {
             return;
         }
         if ( ! isset( $_GET['wsp_csv_msg'] ) || sanitize_key( wp_unslash( $_GET['wsp_csv_msg'] ) ) !== 'error' ) {
@@ -79,7 +113,7 @@ class WorldStat_Admin {
         if ( WorldStat_Uploaded_Csv::has_admin_error_flash() ) {
             return;
         }
-        wp_safe_redirect( admin_url( 'admin.php?page=worldstat-csv' ) );
+        wp_safe_redirect( self::csv_data_admin_url() );
         exit;
     }
 
@@ -87,7 +121,7 @@ class WorldStat_Admin {
      * Process CSV admin forms before any HTML output (see wp-admin/admin.php: admin_init → admin-header → page callback).
      */
     public function handle_csv_admin_post(): void {
-        if ( ! isset( $_GET['page'] ) || sanitize_text_field( wp_unslash( $_GET['page'] ) ) !== 'worldstat-csv' ) {
+        if ( ! isset( $_GET['page'] ) || sanitize_text_field( wp_unslash( $_GET['page'] ) ) !== self::SLUG_CSV_DATA ) {
             return;
         }
         if ( ! isset( $_POST['wsp_csv_nonce'] ) ) {
@@ -103,7 +137,7 @@ class WorldStat_Admin {
         }
 
         $action   = sanitize_text_field( wp_unslash( $_POST['wsp_csv_form_action'] ?? '' ) );
-        $redirect = admin_url( 'admin.php?page=worldstat-csv' );
+        $redirect = self::csv_data_admin_url();
 
         if ( $action === 'upload' && ! empty( $_FILES['wsp_csv_file'] ) ) {
             $kind_raw = isset( $_POST['wsp_csv_dataset_kind'] ) ? sanitize_key( wp_unslash( $_POST['wsp_csv_dataset_kind'] ) ) : WorldStat_Uploaded_Csv::KIND_COUNTRY;
@@ -280,7 +314,7 @@ class WorldStat_Admin {
 
         $name = wp_basename( wp_unslash( $_REQUEST['wsp_csv_delete_name'] ?? '' ) );
         $result = WorldStat_Uploaded_Csv::delete_file( $name );
-        $back   = admin_url( 'admin.php?page=worldstat-csv' );
+        $back   = self::csv_data_admin_url();
 
         if ( is_wp_error( $result ) ) {
             WorldStat_Uploaded_Csv::set_admin_error_flash( $result->get_error_message() );

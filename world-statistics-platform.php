@@ -71,6 +71,7 @@ $wsp_includes = [
     'includes/class-worldstat-uploaded-csv.php',
     'includes/class-worldstat-csv-cleaner.php',
     'includes/class-worldstat-csv-country-meta-importer.php',
+    'includes/class-worldstat-csv-samples.php',
     'admin/class-worldstat-admin.php',
 ];
 

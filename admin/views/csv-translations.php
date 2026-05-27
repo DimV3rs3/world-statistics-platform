@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 $wsp_tr_msg = isset( $_GET['wsp_tr_msg'] ) ? sanitize_key( wp_unslash( $_GET['wsp_tr_msg'] ) ) : '';
 $wsp_tr_n   = isset( $_GET['wsp_tr_n'] ) ? max( 0, (int) wp_unslash( $_GET['wsp_tr_n'] ) ) : 0;
-$wsp_csv_back = admin_url( 'admin.php?page=worldstat-csv' );
+$wsp_csv_back = WorldStat_Admin::csv_data_admin_url();
 ?>
 <div class="wrap wsp-admin-wrap">
 	<h1 class="wsp-admin-title">
@@ -51,17 +51,41 @@ $wsp_csv_back = admin_url( 'admin.php?page=worldstat-csv' );
 	<?php endif; ?>
 
 	<div class="wsp-admin-section">
+		<h2><?php esc_html_e( 'Зачем нужен этот файл', 'flavor-worldstat' ); ?></h2>
+		<p class="description" style="max-width:920px;">
+			<?php esc_html_e( 'В CSV с данными столбцы называются латинскими ключами (road_length, urban_pct). Эта страница задаёт русские подписи для тех же ключей — они появятся в графиках, таблицах и настройках эргономики вместо сырого имени столбца.', 'flavor-worldstat' ); ?>
+		</p>
+		<p class="description" style="max-width:920px;">
+			<?php esc_html_e( 'Ключ в файле переводов должен совпадать с именем столбца в CSV данных (регистр не важен при импорте — ключ приводится к нижнему регистру). Сначала загрузите данные на «Данные CSV», затем при необходимости дополните переводы здесь.', 'flavor-worldstat' ); ?>
+		</p>
+	</div>
+
+	<div class="wsp-admin-section">
 		<h2><?php esc_html_e( 'Формат файла', 'flavor-worldstat' ); ?></h2>
 		<p class="description">
-			<?php esc_html_e( 'UTF-8, разделитель — запятая. Две колонки: технический ключ столбца (как в CSV данных) и русская подпись. Первая строка может быть заголовком: key, label_ru или код, название.', 'flavor-worldstat' ); ?>
+			<?php esc_html_e( 'UTF-8, разделитель — запятая. Две колонки: технический ключ и русская подпись. Первая строка может быть заголовком: key, label_ru (или slug, код, indicator).', 'flavor-worldstat' ); ?>
 		</p>
-		<pre style="background:#f6f7f7;padding:12px;border:1px solid #c3c4c7;overflow:auto;">key,label_ru
-air_passengers__psn,Авиапассажиры
-urban_share_01,Доля городского населения</pre>
+		<pre style="background:#f6f7f7;padding:12px;border:1px solid #c3c4c7;overflow:auto;max-width:520px;">key,label_ru
+road_length,Дороги, км
+urban_pct,Доля городского населения, %</pre>
+
+		<?php if ( class_exists( 'WorldStat_Csv_Samples' ) ) : ?>
+		<p style="margin-top:14px;">
+			<a class="button" href="<?php echo esc_url( WorldStat_Csv_Samples::translations_download_url() ); ?>">
+				<span class="dashicons dashicons-download" style="margin-top:3px;"></span>
+				<?php esc_html_e( 'Скачать пример переводов', 'flavor-worldstat' ); ?>
+			</a>
+		</p>
+		<p class="description" style="max-width:920px;">
+			<?php esc_html_e( 'В примере — ключи из демо-файлов на странице «Данные CSV» (road_length, population_total, pop_dens_km2 и др.). Можно отредактировать и загрузить как основу.', 'flavor-worldstat' ); ?>
+		</p>
+		<?php endif; ?>
 	</div>
 
 	<?php if ( class_exists( 'WSErgo_Settings' ) ) : ?>
-	<form method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin.php?page=worldstat-csv-translations' ) ); ?>" style="margin-top:16px;">
+	<div class="wsp-admin-section">
+		<h2><?php esc_html_e( 'Загрузить файл переводов', 'flavor-worldstat' ); ?></h2>
+	<form method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin.php?page=worldstat-csv-translations' ) ); ?>">
 		<?php wp_nonce_field( 'wsp_csv_translations_upload', 'wsp_csv_translations_nonce' ); ?>
 		<p>
 			<label for="wsp_translations_csv"><strong><?php esc_html_e( 'Файл переводов (.csv)', 'flavor-worldstat' ); ?></strong></label><br />
@@ -71,8 +95,9 @@ urban_share_01,Доля городского населения</pre>
 			<button type="submit" class="button button-primary"><?php esc_html_e( 'Загрузить и объединить', 'flavor-worldstat' ); ?></button>
 		</p>
 		<p class="description">
-			<?php esc_html_e( 'Новые строки добавляются; если ключ уже был в настройках — подпись перезаписывается.', 'flavor-worldstat' ); ?>
+			<?php esc_html_e( 'Новые строки добавляются; если ключ уже был в настройках — подпись перезаписывается. До 10 000 строк за один импорт.', 'flavor-worldstat' ); ?>
 		</p>
 	</form>
+	</div>
 	<?php endif; ?>
 </div>

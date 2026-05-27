@@ -12,7 +12,8 @@ $wsp_csv_msg   = isset( $_GET['wsp_csv_msg'] ) ? sanitize_key( wp_unslash( $_GET
 $wsp_csv_file  = isset( $_GET['wsp_csv_file'] ) ? sanitize_file_name( wp_unslash( $_GET['wsp_csv_file'] ) ) : '';
 $wsp_csv_ready = WorldStat_Uploaded_Csv::is_storage_ready();
 $wsp_csv_table = WorldStat_Uploaded_Csv::table_name();
-$wsp_csv_page   = admin_url( 'admin.php?page=worldstat-csv' );
+$wsp_csv_page   = WorldStat_Admin::csv_data_admin_url();
+$wsp_zones_csv  = WorldStat_Admin::is_zones_csv_plugin_active();
 $wsp_kind_labels = WorldStat_Uploaded_Csv::dataset_kind_labels();
 $wsp_csv_selected_kind = isset( $_GET['wsp_csv_kind'] )
 	? WorldStat_Uploaded_Csv::sanitize_dataset_kind( sanitize_key( wp_unslash( $_GET['wsp_csv_kind'] ) ) )
@@ -25,6 +26,9 @@ $wsp_csv_selected_kind = isset( $_GET['wsp_csv_kind'] )
 	</h1>
 	<p>
 		<a href="<?php echo esc_url( admin_url( 'admin.php?page=worldstat-csv-translations' ) ); ?>"><?php esc_html_e( 'Переводы показателей — загрузка таблицы подписей', 'flavor-worldstat' ); ?></a>
+		<?php if ( $wsp_zones_csv ) : ?>
+			| <a href="<?php echo esc_url( admin_url( 'admin.php?page=' . WorldStat_Admin::SLUG_CSV_ZONES ) ); ?>"><?php esc_html_e( 'CSV Import — импорт зон помещений', 'flavor-worldstat' ); ?></a>
+		<?php endif; ?>
 	</p>
 
 	<?php if ( $wsp_csv_msg === 'upload_ok' && $wsp_csv_file ) : ?>
@@ -76,6 +80,116 @@ $wsp_csv_selected_kind = isset( $_GET['wsp_csv_kind'] )
 	<?php endif; ?>
 
 	<div class="wsp-admin-section">
+		<h2><?php esc_html_e( 'Как устроены данные', 'flavor-worldstat' ); ?></h2>
+		<ol style="margin:0 0 1em 1.4em; max-width: 920px;">
+			<li>
+				<strong><?php esc_html_e( 'Подготовьте CSV', 'flavor-worldstat' ); ?></strong> —
+				<?php esc_html_e( 'кодировка UTF-8, разделитель — запятая. В первой строке — заголовки столбцов. Код страны — ISO 3166-1 alpha-3 (три буквы: USA, DEU, RUS). Год — целое число в колонке year.', 'flavor-worldstat' ); ?>
+			</li>
+			<li>
+				<strong><?php esc_html_e( 'Выберите тип набора', 'flavor-worldstat' ); ?></strong> —
+				<?php esc_html_e( 'от типа зависит, куда попадут столбцы после загрузки (см. блок «Тип данных» ниже).', 'flavor-worldstat' ); ?>
+			</li>
+			<li>
+				<strong><?php esc_html_e( 'Загрузите файл', 'flavor-worldstat' ); ?></strong> —
+				<?php esc_html_e( 'файл проходит автоматическую очистку (дубликаты, пропуски, типы, выбросы), затем сохраняется в таблицу WordPress — отдельные CSV на диске не копятся.', 'flavor-worldstat' ); ?>
+			</li>
+			<li>
+				<strong><?php esc_html_e( 'Переводы подписей (по желанию)', 'flavor-worldstat' ); ?></strong> —
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=worldstat-csv-translations' ) ); ?>"><?php esc_html_e( 'страница «Переводы»', 'flavor-worldstat' ); ?></a>:
+				<?php esc_html_e( 'технические ключи столбцов (road_length, urban_pct…) сопоставьте с русскими подписями для графиков и таблиц на сайте.', 'flavor-worldstat' ); ?>
+			</li>
+		</ol>
+
+		<h3 style="margin-top:1.25em;"><?php esc_html_e( 'Форматы столбцов', 'flavor-worldstat' ); ?></h3>
+		<dl style="margin:0; max-width: 920px;">
+			<dt style="font-weight:600;margin-top:10px;"><?php esc_html_e( 'Длинный (long)', 'flavor-worldstat' ); ?></dt>
+			<dd style="margin:4px 0 0 0;">
+				<code>country_code</code>, <code>year</code>, <em><?php esc_html_e( 'одна метрика', 'flavor-worldstat' ); ?></em>
+				<?php esc_html_e( '— удобен для одного показателя на файл; пример в образце «Показатели страны».', 'flavor-worldstat' ); ?>
+			</dd>
+			<dt style="font-weight:600;margin-top:10px;"><?php esc_html_e( 'Широкий (wide)', 'flavor-worldstat' ); ?></dt>
+			<dd style="margin:4px 0 0 0;">
+				<code>country_code</code>, <code>year</code>, <em><?php esc_html_e( 'несколько числовых столбцов', 'flavor-worldstat' ); ?></em>
+				<?php esc_html_e( '— каждый столбец после year — отдельный показатель; примеры в образцах «Индикаторы для расчётов» и «Показатели страны + расчёты».', 'flavor-worldstat' ); ?>
+			</dd>
+		</dl>
+
+		<h3 style="margin-top:1.25em;"><?php esc_html_e( 'Куда попадают данные по типу', 'flavor-worldstat' ); ?></h3>
+		<table class="widefat striped" style="max-width:920px;margin-top:8px;">
+			<thead>
+				<tr>
+					<th><?php esc_html_e( 'Тип', 'flavor-worldstat' ); ?></th>
+					<th><?php esc_html_e( 'На сайте (страницы стран)', 'flavor-worldstat' ); ?></th>
+					<th><?php esc_html_e( 'Расчёты эргономичности', 'flavor-worldstat' ); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td><?php echo esc_html( $wsp_kind_labels[ WorldStat_Uploaded_Csv::KIND_COUNTRY ] ?? '' ); ?></td>
+					<td><?php esc_html_e( 'Да — мета стран, блок «Данные из загруженных CSV» в обзоре.', 'flavor-worldstat' ); ?></td>
+					<td><?php esc_html_e( 'Нет', 'flavor-worldstat' ); ?></td>
+				</tr>
+				<tr>
+					<td><?php echo esc_html( $wsp_kind_labels[ WorldStat_Uploaded_Csv::KIND_INDICATOR ] ?? '' ); ?></td>
+					<td><?php esc_html_e( 'Нет — только внутренние расчёты.', 'flavor-worldstat' ); ?></td>
+					<td><?php esc_html_e( 'Да', 'flavor-worldstat' ); ?></td>
+				</tr>
+				<tr>
+					<td><?php echo esc_html( $wsp_kind_labels[ WorldStat_Uploaded_Csv::KIND_COMBINED ] ?? '' ); ?></td>
+					<td><?php esc_html_e( 'Да', 'flavor-worldstat' ); ?></td>
+					<td><?php esc_html_e( 'Да', 'flavor-worldstat' ); ?></td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+
+	<?php if ( class_exists( 'WorldStat_Csv_Samples' ) ) : ?>
+	<div class="wsp-admin-section">
+		<h2><?php esc_html_e( 'Скачать примеры данных', 'flavor-worldstat' ); ?></h2>
+		<p class="description" style="max-width:920px;">
+			<?php esc_html_e( 'Демонстрационные файлы (USA, DEU, RUS, ABW, годы 2020–2022). Скачайте нужный тип, отредактируйте под свои показатели и загрузите обратно с тем же типом набора.', 'flavor-worldstat' ); ?>
+		</p>
+		<p style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;">
+			<a class="button" href="<?php echo esc_url( WorldStat_Csv_Samples::download_url( WorldStat_Uploaded_Csv::KIND_COUNTRY ) ); ?>">
+				<span class="dashicons dashicons-download" style="margin-top:3px;"></span>
+				<?php
+				echo esc_html(
+					sprintf(
+						/* translators: %s: dataset kind label */
+						__( 'Пример: %s', 'flavor-worldstat' ),
+						$wsp_kind_labels[ WorldStat_Uploaded_Csv::KIND_COUNTRY ] ?? ''
+					)
+				);
+				?>
+			</a>
+			<a class="button" href="<?php echo esc_url( WorldStat_Csv_Samples::download_url( WorldStat_Uploaded_Csv::KIND_INDICATOR ) ); ?>">
+				<span class="dashicons dashicons-download" style="margin-top:3px;"></span>
+				<?php
+				echo esc_html(
+					sprintf(
+						__( 'Пример: %s', 'flavor-worldstat' ),
+						$wsp_kind_labels[ WorldStat_Uploaded_Csv::KIND_INDICATOR ] ?? ''
+					)
+				);
+				?>
+			</a>
+			<a class="button" href="<?php echo esc_url( WorldStat_Csv_Samples::download_url( WorldStat_Uploaded_Csv::KIND_COMBINED ) ); ?>">
+				<span class="dashicons dashicons-download" style="margin-top:3px;"></span>
+				<?php
+				echo esc_html(
+					sprintf(
+						__( 'Пример: %s', 'flavor-worldstat' ),
+						$wsp_kind_labels[ WorldStat_Uploaded_Csv::KIND_COMBINED ] ?? ''
+					)
+				);
+				?>
+			</a>
+		</p>
+	</div>
+	<?php endif; ?>
+
+	<div class="wsp-admin-section">
 		<h2><?php esc_html_e( 'Загрузить CSV', 'flavor-worldstat' ); ?></h2>
 		<p class="description">
 			<?php esc_html_e( 'CSV принимается во временную папку, проходит очистку (дубликаты, пропуски, типы, выбросы, строки и т.д.), затем сохраняется в таблицу MySQL WordPress. Постоянное хранение — в базе, не в виде отдельных CSV-файлов.', 'flavor-worldstat' ); ?>
@@ -100,21 +214,21 @@ $wsp_csv_selected_kind = isset( $_GET['wsp_csv_kind'] )
 							<?php echo esc_html( $wsp_kind_labels[ WorldStat_Uploaded_Csv::KIND_COUNTRY ] ?? '' ); ?>
 						</label>
 						<span class="description" style="display:block;margin:-4px 0 10px 24px;">
-							<?php esc_html_e( 'Справочные ряды по странам: население, площадь, столица и аналогичные показатели. Используются на страницах стран. Очистка без агрессивного IQR по колонке значений.', 'flavor-worldstat' ); ?>
+							<?php esc_html_e( 'Справочные ряды: дороги, население, площадь и т.п. Попадают в мета стран и в блок «Данные из загруженных CSV» на странице страны. Формат long или wide; в образце — long (country_code, year, road_length).', 'flavor-worldstat' ); ?>
 						</span>
 						<label style="display:block;margin-bottom:4px;">
 							<input type="radio" name="wsp_csv_dataset_kind" value="<?php echo esc_attr( WorldStat_Uploaded_Csv::KIND_INDICATOR ); ?>" <?php checked( $wsp_csv_selected_kind, WorldStat_Uploaded_Csv::KIND_INDICATOR ); ?> />
 							<?php echo esc_html( $wsp_kind_labels[ WorldStat_Uploaded_Csv::KIND_INDICATOR ] ?? '' ); ?>
 						</label>
 						<span class="description" style="display:block;margin:0 0 10px 24px;">
-							<?php esc_html_e( 'Только для расчётов (индекс эргономичности страны и др.): не импортируются в мета стран и не попадают в блок «Данные из загруженных CSV» в обзоре. Очистка такая же мягкая (platform), как у показателей страны, чтобы формат «код–год–значение» не ломался.', 'flavor-worldstat' ); ?>
+							<?php esc_html_e( 'Только для расчётов (индекс эргономичности и др.): на страницах стран не отображаются. Обычно wide: country_code, year и несколько метрик (pop_dens_km2, urban_pct…). См. образец выше.', 'flavor-worldstat' ); ?>
 						</span>
 						<label style="display:block;margin-bottom:4px;">
 							<input type="radio" name="wsp_csv_dataset_kind" value="<?php echo esc_attr( WorldStat_Uploaded_Csv::KIND_COMBINED ); ?>" <?php checked( $wsp_csv_selected_kind, WorldStat_Uploaded_Csv::KIND_COMBINED ); ?> />
 							<?php echo esc_html( $wsp_kind_labels[ WorldStat_Uploaded_Csv::KIND_COMBINED ] ?? '' ); ?>
 						</label>
 						<span class="description" style="display:block;margin:0 0 0 24px;">
-							<?php esc_html_e( 'Как «Показатели страны» (карточки, мета, мягкая очистка), плюс файл участвует в макрорасчётах так же, как индикаторы.', 'flavor-worldstat' ); ?>
+							<?php esc_html_e( 'Один файл и для карточек стран, и для макрорасчётов: wide с справочными и расчётными столбцами (population_total, urban_pct…). См. объединённый образец.', 'flavor-worldstat' ); ?>
 						</span>
 					</p>
 				</fieldset>
