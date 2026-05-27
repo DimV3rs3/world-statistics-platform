@@ -10,6 +10,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class WorldStat_Country_Analysis {
 
+	/**
+	 * Классификация по осям эргономичности (плагин WorldStat Ergonomics).
+	 */
+	public static function is_ergonomics_classification_available(): bool {
+		return class_exists( 'WSErgo_Tier_Classifier' ) && class_exists( 'WSErgo_Settings' );
+	}
+
+	/**
+	 * Сообщение, если плагин эргономичности не активен.
+	 */
+	public static function ergonomics_plugin_required_message(): string {
+		return __( 'Классификация по уровням эргономичности недоступна: установите и активируйте плагин WorldStat Ergonomics (эргономичность).', 'flavor-worldstat' );
+	}
+
 	public static function init(): void {
 		add_action( 'wp_ajax_worldstat_run_country_analysis', [ self::class, 'ajax_run' ] );
 		add_action( 'wp_ajax_nopriv_worldstat_run_country_analysis', [ self::class, 'ajax_run' ] );
@@ -100,7 +114,7 @@ class WorldStat_Country_Analysis {
 		echo '</div></div>';
 
 		echo '<div class="wsp-country-analytics__results" id="wsp-country-analysis-results">';
-		echo '<p class="wsp-muted">' . esc_html__( 'Ниже после «Рассчитать» появится регрессия выбранного показателя. Классификация эргономичности — в блоке выше.', 'flavor-worldstat' ) . '</p>';
+		echo '<p class="wsp-muted">' . esc_html__( 'После «Рассчитать» — график регрессии и аналитический вывод по тренду (R², Δ к базе, интерпретация пунктира). Классификация эргономичности — в блоке выше.', 'flavor-worldstat' ) . '</p>';
 		echo '</div>';
 		echo '</section>';
 	}
@@ -136,6 +150,19 @@ class WorldStat_Country_Analysis {
 
 		unset( $result['clustering'], $result['classification'] );
 
+		$metric = isset( $result['metric'] ) && is_array( $result['metric'] ) ? $result['metric'] : array();
+		$reg    = isset( $result['regression'] ) && is_array( $result['regression'] ) ? $result['regression'] : array();
+		if ( ! empty( $reg['ok'] ) && class_exists( 'WSErgo_Country_Compare_Trends' ) ) {
+			$country_name = get_the_title( $post_id );
+			$result['analysis'] = WSErgo_Country_Compare_Trends::build_single_country_regression_analysis(
+				$metric,
+				$reg,
+				is_string( $country_name ) ? $country_name : ''
+			);
+		} elseif ( ! empty( $reg['ok'] ) ) {
+			$result['analysis'] = self::build_regression_analysis_fallback( $metric, $reg, get_the_title( $post_id ) );
+		}
+
 		self::send_json_success( $result );
 	}
 
@@ -148,12 +175,12 @@ class WorldStat_Country_Analysis {
 		$title = __( 'Классификация по уровням эргономичности', 'flavor-worldstat' );
 		$desc  = __( 'Итог согласован с взвешенным баллом шести критериев (веса E) и их уровнями. По осям — динамическая шкала min–max выборки.', 'flavor-worldstat' );
 
-		if ( ! class_exists( 'WSErgo_Tier_Classifier' ) || ! class_exists( 'WSErgo_Settings' ) ) {
+		if ( ! self::is_ergonomics_classification_available() ) {
 			return [
 				'ok'          => false,
 				'title'       => $title,
 				'description' => $desc,
-				'message'     => __( 'Модуль эргономичности не активен.', 'flavor-worldstat' ),
+				'message'     => self::ergonomics_plugin_required_message(),
 			];
 		}
 		if ( WSErgo_Settings::get_country_index_source() !== 'macro_datasets' ) {
@@ -227,7 +254,13 @@ class WorldStat_Country_Analysis {
 		echo '<div class="wsp-country-analytics__ergo" id="wsp-country-analytics-ergo">';
 		if ( empty( $payload['ok'] ) ) {
 			$msg = isset( $payload['message'] ) ? (string) $payload['message'] : '';
-			echo '<p class="wsp-muted">' . esc_html( $msg !== '' ? $msg : __( 'Классификация эргономичности недоступна.', 'flavor-worldstat' ) ) . '</p>';
+			if ( ! empty( $payload['title'] ) ) {
+				echo '<h4 class="wsp-ca-block__title" style="margin:0 0 8px;">' . esc_html( (string) $payload['title'] ) . '</h4>';
+			}
+			if ( ! empty( $payload['description'] ) ) {
+				echo '<p class="wsp-muted" style="margin:0 0 10px;">' . esc_html( (string) $payload['description'] ) . '</p>';
+			}
+			echo '<p class="wsp-ca-notice wsergo-classification-unavailable">' . esc_html( $msg !== '' ? $msg : self::ergonomics_plugin_required_message() ) . '</p>';
 			echo '</div>';
 			return;
 		}
@@ -275,6 +308,52 @@ class WorldStat_Country_Analysis {
 			echo '</p>';
 		}
 		echo '</div>';
+	}
+
+	/**
+	 * Упрощённый вывод, если плагин эргономичности не подключил WSErgo_Country_Compare_Trends.
+	 *
+	 * @param array{label?:string,series?:array<int,float>} $metric
+	 * @param array<string,mixed>                           $regression
+	 * @return array{summary:string,highlights:list<array{label:string,value:string}>,insights:list<string>}
+	 */
+	private static function build_regression_analysis_fallback( array $metric, array $regression, string $country_name = '' ): array {
+		if ( empty( $regression['ok'] ) ) {
+			return array(
+				'summary'    => '',
+				'highlights' => array(),
+				'insights'   => array(),
+			);
+		}
+		$st           = is_array( $regression['stats'] ?? null ) ? $regression['stats'] : array();
+		$metric_label = (string) ( $metric['label'] ?? '' );
+		$who          = $country_name !== '' ? $country_name : __( 'Страна', 'flavor-worldstat' );
+		$r2           = isset( $st['r2'] ) ? (string) $st['r2'] : '—';
+		$direction    = (string) ( $st['direction'] ?? '—' );
+		$summary      = sprintf(
+			/* translators: 1: metric, 2: country, 3: direction, 4: r2 */
+			__( '«%1$s» (%2$s): тренд — %3$s, R² = %4$s. На графике — факт и линейная экстраполяция до 2050 г.', 'flavor-worldstat' ),
+			$metric_label !== '' ? $metric_label : '—',
+			$who,
+			$direction,
+			$r2
+		);
+		return array(
+			'summary'    => $summary,
+			'highlights' => array(
+				array(
+					'label' => __( 'Тренд', 'flavor-worldstat' ),
+					'value' => $direction,
+				),
+				array(
+					'label' => __( 'R²', 'flavor-worldstat' ),
+					'value' => $r2,
+				),
+			),
+			'insights'   => array(
+				__( 'Пунктир — экстраполяция OLS, не официальный прогноз.', 'flavor-worldstat' ),
+			),
+		);
 	}
 
 	private static function resolve_country_iso2( int $post_id ): string {
@@ -358,6 +437,7 @@ class WorldStat_Country_Analysis {
 					'composite'     => __( 'Сводный балл', 'flavor-worldstat' ),
 					'compare'       => __( 'Сравнение стран', 'flavor-worldstat' ),
 					'networkError'  => __( 'Ошибка сети. Попробуйте снова.', 'flavor-worldstat' ),
+					'analysisTitle' => __( 'Аналитический вывод по показателю', 'flavor-worldstat' ),
 				],
 			]
 		);

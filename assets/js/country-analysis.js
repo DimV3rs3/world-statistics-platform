@@ -100,7 +100,37 @@
 		return $(html + '</article>');
 	}
 
-	function renderRegression($root, data) {
+	function renderAnalysis($container, analysis) {
+		if (!analysis || (!analysis.summary && !(analysis.insights && analysis.insights.length))) {
+			return;
+		}
+		var title = i18n('analysisTitle', 'Аналитический вывод по показателю');
+		var html = '<article class="wsergo-compare-analysis wsergo-compare-analysis--overview">';
+		html += '<h4 class="wsergo-compare-analysis__title">' + esc(title) + '</h4>';
+		if (analysis.summary) {
+			html += '<p class="wsergo-compare-analysis__summary">' + esc(analysis.summary) + '</p>';
+		}
+		if (analysis.highlights && analysis.highlights.length) {
+			html += '<div class="wsergo-compare-analysis__highlights">';
+			analysis.highlights.forEach(function (h) {
+				html += '<div class="wsergo-compare-analysis__highlight">';
+				html += '<span class="wsergo-compare-analysis__hl-label">' + esc(h.label) + '</span>';
+				html += '<strong>' + esc(h.value) + '</strong></div>';
+			});
+			html += '</div>';
+		}
+		if (analysis.insights && analysis.insights.length) {
+			html += '<ul class="wsergo-compare-analysis__insights">';
+			analysis.insights.forEach(function (line) {
+				html += '<li>' + esc(line) + '</li>';
+			});
+			html += '</ul>';
+		}
+		html += '</article>';
+		$container.append(html);
+	}
+
+	function renderRegression($root, data, analysis) {
 		var $b = blockShell(data.title, data.description);
 		if (!data.ok) {
 			$b.append('<p class="wsp-ca-notice">' + esc(data.message) + '</p>');
@@ -119,6 +149,7 @@
 		$b.append(html);
 		$root.append($b);
 		renderChart($b, data.chart);
+		renderAnalysis($b, analysis || {});
 		$root.find('.wsergo-tier-badge:empty').remove();
 	}
 
@@ -129,7 +160,7 @@
 			$root.html('<p class="wsp-ca-notice">' + esc(payload && payload.error ? payload.error : 'Ошибка') + '</p>');
 			return;
 		}
-		renderRegression($root, payload.regression || {});
+		renderRegression($root, payload.regression || {}, payload.analysis || {});
 	}
 
 	function runAnalysis() {

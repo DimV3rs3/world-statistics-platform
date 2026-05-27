@@ -291,6 +291,60 @@
 	font-size: 13px;
 }
 
+/* Аналитический вывод (Обзор и Сравнение) */
+.wsergo-compare-analysis {
+	margin-top: 16px;
+	padding: 14px 16px;
+	border-radius: 10px;
+	border: 1px solid #e5e7eb;
+	background: #f8fafc;
+}
+
+.wsergo-compare-analysis__title {
+	margin: 0 0 8px;
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.wsergo-compare-analysis__summary {
+	margin: 0 0 12px;
+	font-size: 14px;
+	line-height: 1.55;
+}
+
+.wsergo-compare-analysis__highlights {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px 16px;
+	margin-bottom: 12px;
+}
+
+.wsergo-compare-analysis__highlight {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-size: 13px;
+}
+
+.wsergo-compare-analysis__hl-label {
+	color: #64748b;
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+}
+
+.wsergo-compare-analysis__insights {
+	margin: 0;
+	padding-left: 1.2em;
+	font-size: 13px;
+	line-height: 1.5;
+	color: #334155;
+}
+
+.wsergo-compare-analysis__insights li + li {
+	margin-top: 6px;
+}
+
 @media (max-width: 720px) {
 	.wsp-ca-settings__row--regression,
 	.wsp-ca-settings__row--cluster {
